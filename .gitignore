@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+.idea/
+chats/
+memory/
+backups/
+usage.json
+models_cache.json
+.streamlit/secrets.toml
+*.zip
+*.pdf
