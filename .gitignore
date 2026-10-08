@@ -9,3 +9,4 @@ models_cache.json
 .streamlit/secrets.toml
 *.zip
 *.pdf
+hs_err_pid*.log
