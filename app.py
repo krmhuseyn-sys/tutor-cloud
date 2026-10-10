@@ -265,6 +265,9 @@ def is_busy(e):
 
 def friendly(e):
     s = str(e)
+    if s.startswith("MULTI:"):
+        head = "Could not get an answer. " if st.session_state.get("ui") == "en" else "Cavab alınmadı. "
+        return head + s[6:]
     if s == "EMPTY":
         return t("empty")
     if s == "NOPROVIDER":
@@ -274,6 +277,17 @@ def friendly(e):
     if is_busy(e):
         return t("busy")
     return t("err") + s[:300]
+
+
+def short_reason(e):
+    s = str(e)
+    if is_busy(e):
+        return "yüklüdür və ya limit (429/503)"
+    if "model_not_found" in s or "404" in s:
+        return "model tapılmadı (404)"
+    if "401" in s or "403" in s:
+        return "açar qəbul olunmadı (401/403)"
+    return s[:80]
 
 
 # ======================= PROVAYDER QATI =======================
@@ -293,9 +307,48 @@ def openai_client(pid):
     return OpenAI(api_key=os.getenv(cfg["env"]), base_url=cfg["base"])
 
 
+MODEL_CACHE_FILE = "models_cache.json"
+MODEL_CACHE_TTL = 12 * 3600
+GEMINI_BACKUP_MODEL = os.getenv("GEMINI_BACKUP_MODEL", "gemini-flash-lite-latest")
+
+
+def groq_pick(items):
+    """items: [(model_id, created)]. Söhbət modelləri arasından ən uyğununu seçir."""
+    skip = re.compile(r"whisper|guard|tts|orpheus|playai|embed|safeguard", re.I)
+    chat = [(mid, ts) for mid, ts in items if not skip.search(mid)]
+    for pat in (r"gpt-oss-120b", r"llama-3\.3-70b", r"llama-4", r"qwen", r"kimi", r"gpt-oss-20b", r"llama-3\.1-8b"):
+        found = [(ts, mid) for mid, ts in chat if re.search(pat, mid)]
+        if found:
+            return max(found)[1]
+    return max(((ts, mid) for mid, ts in chat), default=(0, None))[1]
+
+
 def resolve_model(pid):
+    """Əvvəl mühit dəyişəni. Groq üçün mövcud modellər siyahısından avtomatik seçim (12 saat yadda saxlanır)."""
     cfg = PROVIDERS[pid]
-    return os.getenv(cfg["model_env"]) or cfg["fallback"]
+    forced = os.getenv(cfg["model_env"])
+    if forced:
+        return forced
+    if pid != "groq" or not available(pid):
+        return cfg["fallback"]
+    cache = read_json(MODEL_CACHE_FILE, {})
+    ent = cache.get(pid)
+    if ent and time.time() - ent.get("ts", 0) < MODEL_CACHE_TTL:
+        return ent["model"]
+    try:
+        g = openai_client(pid)
+        items = [(m.id, float(getattr(m, "created", 0) or 0)) for m in g.models.list()]
+        pick = groq_pick(items)
+        if pick:
+            cache[pid] = {"model": pick, "ts": time.time()}
+            write_json(MODEL_CACHE_FILE, cache)
+            return pick
+    except Exception:
+        pass
+    # alınmadısa 5 dəqiqə ehtiyat adla davam et
+    cache[pid] = {"model": cfg["fallback"], "ts": time.time() - MODEL_CACHE_TTL + 300}
+    write_json(MODEL_CACHE_FILE, cache)
+    return cfg["fallback"]
 
 
 def gemini_stream(system, msgs, temp, web):
@@ -308,9 +361,9 @@ def gemini_stream(system, msgs, temp, web):
     if web:
         kwargs["tools"] = [types.Tool(google_search=types.GoogleSearch())]
     cfg = types.GenerateContentConfig(**kwargs)
-    model = resolve_model("gemini")
+    models = [resolve_model("gemini"), GEMINI_BACKUP_MODEL]
     last = None
-    for attempt in range(2):
+    for attempt, model in enumerate(models):
         started = False
         try:
             count_call("gemini")
@@ -323,7 +376,7 @@ def gemini_stream(system, msgs, temp, web):
             if started or not is_busy(e):
                 raise
             last = e
-            time.sleep(4)
+            time.sleep(2)
     if last:
         raise last
 
@@ -377,7 +430,7 @@ def stream_one(pid, system, msgs, temp, web):
 def stream_answer(system, msgs, plan, temp=0.3):
     """plan: [(provayder, veb_axtarışı)] ardıcıllığı. Birincisi alınmasa növbətisinə keçir."""
     st.session_state["web_sources"] = []
-    last, tried, capped = None, False, False
+    errors, tried, capped = [], False, False
     for pid, web in plan:
         if not available(pid):
             continue
@@ -393,13 +446,18 @@ def stream_answer(system, msgs, plan, temp=0.3):
             if got:
                 st.session_state["used"] = pid + ("+web" if web else "")
                 return
+            errors.append(f"{PROVIDERS[pid]['label']}: boş cavab")
         except Exception as e:
             if got:
                 raise
-            last = e
-    if last:
-        raise last
-    raise RuntimeError("EMPTY" if tried else ("CAP" if capped else "NOPROVIDER"))
+            if "model_not_found" in str(e) or "404" in str(e):
+                c = read_json(MODEL_CACHE_FILE, {})
+                c.pop(pid, None)
+                write_json(MODEL_CACHE_FILE, c)
+            errors.append(f"{PROVIDERS[pid]['label']}: {short_reason(e)}")
+    if errors:
+        raise RuntimeError("MULTI:" + " | ".join(errors))
+    raise RuntimeError("CAP" if capped else ("EMPTY" if tried else "NOPROVIDER"))
 
 
 def ask_msgs(system, msgs, plan, temp=0.2):
