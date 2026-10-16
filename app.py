@@ -956,7 +956,7 @@ st.sidebar.radio(
 
 avail_ids = [p for p in PROVIDERS if available(p) and (IS_OWNER or PROVIDERS[p]["free"])]
 choice = st.sidebar.selectbox(
-    t("provider"), ["auto", "smart"] + avail_ids,
+    t("provider"), (["auto", "smart"] if available("perplexity") else ["auto"]) + avail_ids,
     format_func=lambda k: t("p_auto") if k == "auto" else (t("p_smart") if k == "smart" else provider_label(k)))
 web_on = st.sidebar.toggle(t("web"), value=False)
 
