@@ -216,16 +216,34 @@ class SupabaseStore:
 
     # ---- profil
     def get_profile(self):
-        rows = (self._db().table("profiles").select("username,about").eq("id", self.user_id)
-                .limit(1).execute().data) or []
+        try:
+            rows = (self._db().table("profiles").select("username,about,theme").eq("id", self.user_id)
+                    .limit(1).execute().data) or []
+        except SessionExpired:
+            raise
+        except Exception:  # tema sütunu hələ yaradılmayıb: köhnə sxemlə işləməyə davam et
+            rows = (self._db().table("profiles").select("username,about").eq("id", self.user_id)
+                    .limit(1).execute().data) or []
         return rows[0] if rows else None
 
     def username_available(self, name):
         res = self._db().rpc("username_available", {"p_name": name}).execute()
         return bool(res.data)
 
-    def create_profile(self, username):
-        self._db().table("profiles").insert({"id": self.user_id, "username": username}).execute()
+    def create_profile(self, username, theme="teal"):
+        row = {"id": self.user_id, "username": username, "theme": theme}
+        try:
+            self._db().table("profiles").insert(row).execute()
+        except SessionExpired:
+            raise
+        except Exception as e:
+            if "theme" not in str(e).lower():
+                raise
+            row.pop("theme")  # tema sütunu yoxdur: yalnız adı yaz
+            self._db().table("profiles").insert(row).execute()
+
+    def set_theme(self, theme):
+        self._db().table("profiles").update({"theme": theme}).eq("id", self.user_id).execute()
 
     def set_about(self, text):
         self._db().table("profiles").update({"about": (text or "")[:600]}).eq("id", self.user_id).execute()

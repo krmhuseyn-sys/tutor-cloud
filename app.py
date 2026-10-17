@@ -4,6 +4,7 @@ import chromadb
 from google import genai
 from google.genai import types
 import store  # saxlama qatı: yerli fayllar və ya Supabase
+import theme as themes  # görünüş: temalar və animasiyalar
 
 try:
     from openai import OpenAI  # Groq və Perplexity bu kitabxana ilə işləyir
@@ -58,7 +59,7 @@ TXT = {
         "subject": "Fənn", "mode": "Rejim",
         "m_learn": "📖 İzah", "m_practice": "🏋️ Praktika", "m_exam": "📝 İmtahan",
         "provider": "Model mənbəyi",
-        "p_auto": "Avto (yalnız pulsuzlar)", "p_smart": "Ağıllı seçim (araşdırma sualları Perplexity-yə)",
+        "p_smart": "Ağıllı seçim",
         "free": "pulsuz", "paid": "pullu",
         "web": "🔎 Veb axtarışı",
         "verify": "Dəqiqlik rejimi (2 sorğu)",
@@ -84,7 +85,10 @@ TXT = {
         "cap": "Perplexity günlük limitinə çatdı (kreditə qoruma). Sabah davam et və ya PERPLEXITY_DAILY_CAP ilə limiti artır.",
         "err": "Xəta: ",
         "providers": "🔌 Provayderlər", "key_missing": "açar yoxdur", "pkg_missing": "paket yoxdur",
-        "theme_note": "Tema: yuxarı sağdakı ⋮ → Settings → Theme.",
+        "theme_title": "🎨 Görünüş", "theme_pick": "Özünə uyğun görünüşü seç (sonra Hesab bölməsindən dəyişə bilərsən)",
+        "welcome_sub": "Fənlərin üçün ağıllı köməkçi",
+        "anim_force": "Animasiyaları həmişə göstər",
+        "anim_help": "Əgər Windows və ya telefonda \"animasiyaları azalt\" açıqdırsa, burada onları məcburi aç.",
         "login": "Daxil ol", "signup": "Qeydiyyat", "email": "E-poçt", "password": "Parol",
         "password2": "Parolu təkrarla", "invite": "Dəvət kodu",
         "login_btn": "Daxil ol", "signup_btn": "Hesab yarat",
@@ -117,7 +121,7 @@ TXT = {
         "subject": "Subject", "mode": "Mode",
         "m_learn": "📖 Learn", "m_practice": "🏋️ Practice", "m_exam": "📝 Exam",
         "provider": "Model source",
-        "p_auto": "Auto (free ones only)", "p_smart": "Smart pick (research questions go to Perplexity)",
+        "p_smart": "Smart pick",
         "free": "free", "paid": "paid",
         "web": "🔎 Web search",
         "verify": "Accuracy mode (2 requests)",
@@ -143,7 +147,10 @@ TXT = {
         "cap": "Perplexity reached its daily cap (credit protection). Continue tomorrow or raise PERPLEXITY_DAILY_CAP.",
         "err": "Error: ",
         "providers": "🔌 Providers", "key_missing": "no key", "pkg_missing": "package missing",
-        "theme_note": "Theme: top-right ⋮ → Settings → Theme.",
+        "theme_title": "🎨 Appearance", "theme_pick": "Pick the look you like (you can change it later in Account)",
+        "welcome_sub": "Your smart study companion",
+        "anim_force": "Always show animations",
+        "anim_help": "If your system has \"reduce motion\" turned on, turn animations on here anyway.",
         "login": "Log in", "signup": "Sign up", "email": "Email", "password": "Password",
         "password2": "Repeat password", "invite": "Invite code",
         "login_btn": "Log in", "signup_btn": "Create account",
@@ -245,6 +252,22 @@ st.session_state.setdefault("used", "gemini")
 st.session_state.setdefault("web_sources", [])
 
 AUTH_ON = store.auth_enabled()  # Supabase açarları varsa giriş sistemi aktivdir
+
+
+def cur_theme():
+    """Hansı tema göstərilsin: hesabdakı seçim, yoxsa qeydiyyatdakı önizləmə, yoxsa standart."""
+    ss = st.session_state
+    prof = ss.get("profile") or {}
+    pick = ss.get("theme_acc") or prof.get("theme") or ss.get("theme_sel")
+    return themes.valid_theme(pick)
+
+
+def inject_theme():
+    st.markdown(themes.css(cur_theme(), force_motion=bool(st.session_state.get("anim_force"))),
+                unsafe_allow_html=True)
+
+
+inject_theme()
 
 # ---- PIN qoruması (APP_PIN təyin olunubsa; təyin olunmayıbsa yerli işləmədə heç nə soruşmur) ----
 _PIN = os.getenv("APP_PIN", "")
@@ -559,8 +582,8 @@ def choose_plan(choice, q, web, allow_pplx=True):
 
 
 def provider_label(pid):
-    cfg = PROVIDERS[pid]
-    return f"{cfg['label']} · {t('free') if cfg['free'] else t('paid')}"
+    """Qısa ad: mötərizə və 'pulsuz/pullu' sözləri olmadan."""
+    return re.sub(r"\s*\(.*?\)", "", PROVIDERS[pid]["label"]).strip()
 
 
 def used_label(used):
@@ -648,6 +671,24 @@ def cb_new():
     st.session_state.cid = None
 
 
+def cb_theme():
+    val = themes.valid_theme(st.session_state.get("theme_acc"))
+    if AUTH_ON:
+        try:
+            S.set_theme(val)
+            (st.session_state.get("profile") or {})["theme"] = val
+        except Exception:
+            pass
+
+
+def theme_select():
+    cur = cur_theme()
+    st.selectbox(t("theme_title"), themes.ORDER, index=themes.ORDER.index(cur), key="theme_acc",
+                 format_func=lambda k: themes.label(k, st.session_state.get("ui", "az")),
+                 on_change=cb_theme)
+    st.toggle(t("anim_force"), key="anim_force", help=t("anim_help"))
+
+
 def cb_delete(key, cid):
     try:
         S.delete_chat(key, cid)
@@ -673,7 +714,7 @@ def env_int(name, default):
 
 # ======================= GİRİŞ (Supabase) =======================
 def drop_login():
-    for k in ("sb", "user", "profile", "cid", "cur_key", "last_audio"):
+    for k in ("sb", "user", "profile", "cid", "cur_key", "last_audio", "theme_sel", "theme_acc"):
         st.session_state.pop(k, None)
 
 
@@ -767,7 +808,7 @@ def do_signup(email, pw, pw2, code):
 
 def login_screen():
     lang_picker()
-    st.title("🎓 Tutor Komandam")
+    st.markdown(themes.hero("Tutor Komandam", t("welcome_sub")), unsafe_allow_html=True)
     tab_in, tab_up = st.tabs([t("login"), t("signup")])
     with tab_in:
         with st.form("login_form"):
@@ -792,6 +833,12 @@ def username_screen(stor):
     lang_picker()
     st.title(t("choose_username"))
     st.caption(t("username_rules"))
+    st.session_state.setdefault("theme_sel", themes.DEFAULT_THEME)
+    st.markdown("**" + t("theme_pick") + "**")
+    st.markdown(themes.swatch_row(st.session_state["theme_sel"], st.session_state.get("ui", "az")),
+                unsafe_allow_html=True)
+    st.radio("theme", themes.ORDER, key="theme_sel", horizontal=True, label_visibility="collapsed",
+             format_func=lambda k: themes.label(k, st.session_state.get("ui", "az")))
     with st.form("uname_form"):
         name = st.text_input(t("username_label"), key="uname")
         go = st.form_submit_button(t("username_save"))
@@ -804,7 +851,7 @@ def username_screen(stor):
                 if not stor.username_available(name):
                     st.error(t("username_taken"))
                 else:
-                    stor.create_profile(name)
+                    stor.create_profile(name, themes.valid_theme(st.session_state.get("theme_sel")))
                     st.session_state.pop("profile", None)
                     st.rerun()
             except store.SessionExpired:
@@ -936,6 +983,7 @@ def transcribe(audio_bytes, key):
 # ======================= SAXLAMA VƏ GİRİŞ =======================
 if AUTH_ON:
     S = auth_gate()
+    inject_theme()  # hesabdakı tema
 else:
     S = store.LocalStore()
 IS_OWNER = (not AUTH_ON) or (S.email in store.owner_emails())
@@ -956,8 +1004,8 @@ st.sidebar.radio(
 
 avail_ids = [p for p in PROVIDERS if available(p) and (IS_OWNER or PROVIDERS[p]["free"])]
 choice = st.sidebar.selectbox(
-    t("provider"), (["auto", "smart"] if available("perplexity") else ["auto"]) + avail_ids,
-    format_func=lambda k: t("p_auto") if k == "auto" else (t("p_smart") if k == "smart" else provider_label(k)))
+    t("provider"), ["smart"] + avail_ids,
+    format_func=lambda k: t("p_smart") if k == "smart" else provider_label(k))
 web_on = st.sidebar.toggle(t("web"), value=False)
 
 key = st.sidebar.selectbox(t("subject"), SUBJ_KEYS, format_func=subj_name)
@@ -1139,6 +1187,7 @@ if AUTH_ON:
                 st.rerun()
             except Exception as e:
                 st.error(friendly(e))
+        theme_select()
         st.caption(t("privacy"))
         st.button(t("logout"), on_click=do_logout, key="logout_btn")
         st.divider()
@@ -1154,6 +1203,10 @@ if AUTH_ON:
                 st.rerun()
             except Exception as e:
                 st.error(friendly(e))
+
+if not AUTH_ON:
+    with st.sidebar.expander(t("theme_title")):
+        theme_select()
 
 # ======================= YAN PANELİN ALTI (yalnız sahib üçün) =======================
 st.sidebar.divider()
@@ -1171,4 +1224,3 @@ if IS_OWNER:
                 st.caption(f"✅ {provider_label(pid)} → {resolve_model(pid)}{extra}")
     u = _usage()
     st.sidebar.caption(t("usage") + ": " + ", ".join(f"{k} {v}" for k, v in u.items() if k != "date"))
-st.sidebar.caption(t("theme_note"))
