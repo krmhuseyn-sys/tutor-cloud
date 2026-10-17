@@ -111,6 +111,7 @@ TXT = {
         "delete_confirm": "Təsdiq üçün istifadəçi adını yaz", "delete_btn": "Həmişəlik sil",
         "quota_hit": "Bu günlük sual limitinə çatdın. Sabah davam et.", "quota": "Bu gün sual",
         "session_lost": "Sessiya bitib. Yenidən daxil ol.",
+        "remember": "Bu cihazda məni xatırla (30 gün)",
         "lib_note": "Bu hesabda kitab materialları bağlıdır. Tutor profil və ümumi biliklə cavab verir.",
         "privacy": ("Məxfilik: söhbətlərin hesabında saxlanır, digər istifadəçilər görmür. Layihə sahibi texniki olaraq "
                     "verilənlər bazasına çıxışa malikdir. Sorğular Google (Gemini) və ya Groq-a göndərilir; pulsuz "
@@ -173,6 +174,7 @@ TXT = {
         "delete_confirm": "Type your username to confirm", "delete_btn": "Delete forever",
         "quota_hit": "You reached today's question limit. Continue tomorrow.", "quota": "Questions today",
         "session_lost": "Session expired. Please log in again.",
+        "remember": "Remember me on this device (30 days)",
         "lib_note": "Course book materials are not available on this account. The tutor answers from its profile and general knowledge.",
         "privacy": ("Privacy: your chats are stored in your account and other users cannot see them. The project owner "
                     "technically has access to the database. Requests are sent to Google (Gemini) or Groq; on free tiers "
@@ -713,9 +715,54 @@ def env_int(name, default):
 
 
 # ======================= GİRİŞ (Supabase) =======================
+COOKIE = "tk_rt"
+
+
+def cookie_write(value):
+    """Brauzerdə yaddaş kukisini yazır (value=None olsa silir). Gizli, hündürlüyü 0 olan çərçivə."""
+    import json as _j
+    import streamlit.components.v1 as components
+    v = _j.dumps(value or "")
+    age = 2592000 if value else 0
+    components.html(
+        "<script>try{const p=window.parent;const sec=p.location.protocol==='https:'?'; Secure':'';"
+        f"p.document.cookie='{COOKIE}='+encodeURIComponent({v})+'; max-age={age}; path=/; SameSite=Strict'+sec;"
+        "}catch(e){}</script>", height=0)
+
+
+def cookie_read():
+    try:
+        return st.context.cookies.get(COOKIE) or None
+    except Exception:
+        return None
+
+
+def try_restore():
+    """Səhifə yenilənəndə kukidəki yeniləmə tokeni ilə girişi bərpa edir (bir sessiyada yalnız bir dəfə)."""
+    ss = st.session_state
+    if ss.get("restore_tried"):
+        return False
+    ss["restore_tried"] = True
+    rt = cookie_read()
+    if not rt:
+        return False
+    try:
+        sb = store.make_client()
+        res = sb.auth.refresh_session(rt)
+        if not res or not res.session or not res.user:
+            raise ValueError("no session")
+    except Exception:
+        ss["clear_cookie"] = True  # token ölüb: kukini təmizlə
+        return False
+    set_login(sb, res.user)
+    ss["remember"] = True
+    return True
+
+
 def drop_login():
-    for k in ("sb", "user", "profile", "cid", "cur_key", "last_audio", "theme_sel", "theme_acc"):
+    for k in ("sb", "user", "profile", "cid", "cur_key", "last_audio", "theme_sel", "theme_acc", "remember", "rt_written"):
         st.session_state.pop(k, None)
+    st.session_state["clear_cookie"] = True
 
 
 def do_logout():
@@ -749,7 +796,7 @@ def set_login(sb, user):
     st.session_state["login_fails"] = 0
 
 
-def do_login(email, pw):
+def do_login(email, pw, remember=True):
     ss = st.session_state
     if ss.get("login_fails", 0) >= 5:
         st.error(t("too_many"))
@@ -765,6 +812,7 @@ def do_login(email, pw):
         st.error(t("login_fail"))  # səbəbi açıqlamırıq (e-poçtun mövcudluğu bilinməsin)
         return
     set_login(sb, res.user)
+    st.session_state["remember"] = bool(remember)
     st.rerun()
 
 
@@ -799,6 +847,7 @@ def do_signup(email, pw, pw2, code):
         return
     if res is not None and res.session is not None and res.user is not None:
         set_login(sb, res.user)  # e-poçt təsdiqi söndürülübsə dərhal daxil olur
+        st.session_state["remember"] = True
         st.rerun()
     elif res is not None and res.user is not None:
         st.success(t("signup_confirm"))
@@ -814,9 +863,10 @@ def login_screen():
         with st.form("login_form"):
             email = st.text_input(t("email"), key="li_email")
             pw = st.text_input(t("password"), type="password", key="li_pw")
+            rem = st.checkbox(t("remember"), value=True, key="li_rem")
             go = st.form_submit_button(t("login_btn"))
         if go:
-            do_login(email, pw)
+            do_login(email, pw, rem)
     with tab_up:
         with st.form("signup_form"):
             email2 = st.text_input(t("email"), key="su_email")
@@ -869,13 +919,24 @@ def username_screen(stor):
 def auth_gate():
     """Giriş edilməyibsə giriş səhifəsini göstərib dayanır. Edilibsə SupabaseStore qaytarır."""
     ss = st.session_state
+    if ss.get("sb") is None and try_restore():
+        pass
     sb, user = ss.get("sb"), ss.get("user")
     if sb is not None and user:
+        sess = None
         try:
-            alive = sb.auth.get_session() is not None
+            sess = sb.auth.get_session()
         except Exception:
-            alive = False
+            sess = None
+        alive = sess is not None
         if alive:
+            # "Məni xatırla": yeniləmə tokeni dəyişibsə kukini yenilə
+            if ss.get("remember") and ss.get("rt_written") != sess.refresh_token:
+                cookie_write(sess.refresh_token)
+                ss["rt_written"] = sess.refresh_token
+            elif not ss.get("remember") and cookie_read() and not ss.get("cookie_cleared"):
+                cookie_write(None)  # "xatırlama" seçilməyib: köhnə kukini sil
+                ss["cookie_cleared"] = True
             stor = store.SupabaseStore(sb, user["id"], user["email"])
             prof = ss.get("profile")
             if prof is None:
@@ -896,6 +957,8 @@ def auth_gate():
             return stor
         drop_login()
         st.warning(t("session_lost"))
+    if ss.pop("clear_cookie", False):
+        cookie_write(None)
     login_screen()
     st.stop()
 
