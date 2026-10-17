@@ -335,24 +335,83 @@ div:has(> [role="listbox"]), div:has(> div > [role="listbox"]) {{
 }}
 .stApp::before {{
   top:-18vmax; left:-14vmax;
-  background:radial-gradient(circle, color-mix(in srgb, var(--tk-accent) 30%, transparent), transparent 65%);
-  animation:tk-drift-a 16s ease-in-out infinite alternate;
+  background:radial-gradient(circle, color-mix(in srgb, var(--tk-accent) 50%, transparent), transparent 66%);
+  animation:tk-drift-a 11s ease-in-out infinite alternate;
 }}
 .stApp::after {{
   bottom:-22vmax; right:-16vmax;
-  background:radial-gradient(circle, color-mix(in srgb, var(--tk-accent2) 28%, transparent), transparent 65%);
-  animation:tk-drift-b 20s ease-in-out infinite alternate;
+  background:radial-gradient(circle, color-mix(in srgb, var(--tk-accent2) 48%, transparent), transparent 66%);
+  animation:tk-drift-b 14s ease-in-out infinite alternate;
 }}
 
 @keyframes tk-rise {{ from {{ opacity:0; transform:translateY(10px); }} to {{ opacity:1; transform:none; }} }}
 @keyframes tk-float {{ 0%,100% {{ transform:translateY(0) rotate(-3deg); }} 50% {{ transform:translateY(-7px) rotate(3deg); }} }}
 @keyframes tk-shine {{ 0%,100% {{ background-position:0% 50%; }} 50% {{ background-position:100% 50%; }} }}
-@keyframes tk-drift-a {{ from {{ transform:translate(0,0) scale(1); }} to {{ transform:translate(14vmax,10vmax) scale(1.2); }} }}
-@keyframes tk-drift-b {{ from {{ transform:translate(0,0) scale(1); }} to {{ transform:translate(-13vmax,-9vmax) scale(1.25); }} }}
+@keyframes tk-drift-a {{ from {{ transform:translate(0,0) scale(1); }} to {{ transform:translate(34vmax,24vmax) scale(1.35); }} }}
+@keyframes tk-drift-b {{ from {{ transform:translate(0,0) scale(1); }} to {{ transform:translate(-32vmax,-22vmax) scale(1.4); }} }}
+
+/* üzən işıq nöqtələri: yuxarı qalxan hissəciklər */
+[data-testid="stAppViewContainer"]::before {{
+  content:""; position:fixed; inset:0; z-index:0; pointer-events:none; opacity:.85;
+  background-image:
+    radial-gradient(circle, var(--tk-accent) 0 3px, transparent 4px),
+    radial-gradient(circle, var(--tk-accent2) 0 4px, transparent 5px),
+    radial-gradient(circle, var(--tk-accent) 0 2px, transparent 3px);
+  background-size:230px 230px, 340px 340px, 150px 150px;
+  background-position:20px 40px, 130px 200px, 70px 90px;
+  animation:tk-particles 28s linear infinite;
+  -webkit-mask-image:linear-gradient(180deg, transparent 0, #000 25%, #000 75%, transparent 100%);
+  mask-image:linear-gradient(180deg, transparent 0, #000 25%, #000 75%, transparent 100%);
+  opacity:.35;
+}}
+@keyframes tk-particles {{
+  from {{ background-position:20px 40px, 130px 200px, 70px 90px; }}
+  to   {{ background-position:60px -190px, 90px -140px, 110px -60px; }}
+}}
+
+/* düymələr: qalxma + parıltı */
+.stApp .stButton > button, .stApp .stDownloadButton > button, .stApp [data-testid="stFormSubmitButton"] > button {{
+  transition:transform .18s ease, box-shadow .18s ease, filter .18s ease; position:relative; overflow:hidden;
+}}
+.stApp .stButton > button:hover, .stApp .stDownloadButton > button:hover, .stApp [data-testid="stFormSubmitButton"] > button:hover {{
+  transform:translateY(-3px) scale(1.02); box-shadow:0 10px 24px color-mix(in srgb, var(--tk-accent) 38%, transparent); filter:brightness(1.06);
+}}
+.stApp .stButton > button:active {{ transform:translateY(0) scale(.98); }}
+.stApp .stButton > button[kind="primary"], .stApp [data-testid="stFormSubmitButton"] > button[kind="primaryFormSubmit"] {{
+  background:linear-gradient(100deg, var(--tk-accent), var(--tk-accent2), var(--tk-accent)) !important;
+  background-size:220% 100% !important; animation:tk-shine 6s ease-in-out infinite;
+}}
+
+/* mesajlar: yumşaq sıçrayış, loqo parıltısı */
+[data-testid="stChatMessage"] {{ animation:tk-pop .55s cubic-bezier(.2,.9,.25,1.15) both !important; }}
+@keyframes tk-pop {{ 0% {{ opacity:0; transform:translateY(18px) scale(.97); }} 100% {{ opacity:1; transform:none; }} }}
+.tk-logo {{ animation:tk-float 4s ease-in-out infinite, tk-pulse 3s ease-in-out infinite !important; }}
+@keyframes tk-pulse {{ 0%,100% {{ filter:drop-shadow(0 6px 10px color-mix(in srgb, var(--tk-accent) 30%, transparent)); }}
+  50% {{ filter:drop-shadow(0 12px 26px color-mix(in srgb, var(--tk-accent) 75%, transparent)); }} }}
+[data-testid="stSidebar"] .stSelectbox, [data-testid="stSidebar"] [data-testid="stExpander"] {{ transition:transform .2s ease; }}
+[data-testid="stSidebar"] [data-testid="stExpander"]:hover {{ transform:translateX(3px); }}
+[data-testid="stChatMessage"]:hover {{ box-shadow:0 8px 22px color-mix(in srgb, var(--tk-accent) 18%, transparent); transition:box-shadow .25s; }}
+
+/* söhbət xanası: ətrafında axan işıq */
+@property --tk-ang {{ syntax:"<angle>"; initial-value:0deg; inherits:false; }}
+.stApp div[data-testid="stChatInput"] {{
+  border:2.5px solid transparent !important;
+  background:
+    linear-gradient(var(--tk-surface), var(--tk-surface)) padding-box,
+    conic-gradient(from var(--tk-ang), transparent 0deg, var(--tk-accent) 50deg, var(--tk-accent2) 110deg, transparent 170deg,
+      transparent 190deg, var(--tk-accent2) 240deg, var(--tk-accent) 300deg, transparent 360deg) border-box !important;
+  animation:tk-spin 4.5s linear infinite;
+  box-shadow:0 0 18px color-mix(in srgb, var(--tk-accent) 35%, transparent), var(--tk-shadow) !important;
+}}
+.stApp div[data-testid="stChatInput"]:focus-within {{
+  animation-duration:2.2s;
+  box-shadow:0 0 30px color-mix(in srgb, var(--tk-accent) 60%, transparent), var(--tk-shadow) !important;
+}}
+@keyframes tk-spin {{ to {{ --tk-ang:360deg; }} }}
 
 {reduce_block}
 @media (max-width: 640px) {{
-  .stApp::before, .stApp::after {{ opacity:.6; }}
+  .stApp::before, .stApp::after {{ opacity:.7; }}
   [data-testid="stChatMessage"] {{ border-radius:16px !important; padding:12px 13px !important; }}
 }}
 </style>
