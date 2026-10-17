@@ -745,15 +745,18 @@ def try_restore():
     ss["restore_tried"] = True
     rt = cookie_read()
     if not rt:
+        ss["restore_dbg"] = "kuki serverə gəlmir"
         return False
     try:
         sb = store.make_client()
         res = sb.auth.refresh_session(rt)
         if not res or not res.session or not res.user:
             raise ValueError("no session")
-    except Exception:
+    except Exception as e:
+        ss["restore_dbg"] = f"token yenilənmədi: {type(e).__name__}: {str(e)[:90]}"
         ss["clear_cookie"] = True  # token ölüb: kukini təmizlə
         return False
+    ss["restore_dbg"] = "bərpa oldu"
     set_login(sb, res.user)
     ss["remember"] = True
     return True
@@ -877,6 +880,12 @@ def login_screen():
         if go2:
             do_signup(email2, pw_a, pw_b, code)
     st.caption(t("privacy"))
+    if st.query_params.get("debug") == "1":  # diaqnostika: yalnız kuki adları, dəyərlər yox
+        try:
+            names = list(st.context.cookies.keys())
+        except Exception as e:
+            names = [f"xəta: {type(e).__name__}"]
+        st.caption(f"debug: kukilər={names} | bərpa={st.session_state.get('restore_dbg')}")
 
 
 def username_screen(stor):
