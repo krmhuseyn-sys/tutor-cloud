@@ -96,6 +96,26 @@ def clean_card(c):
     return {"front": front, "back": back, "src": str(c.get("src") or "")[:200], "page": page}
 
 
+DEFAULT_GOAL = 10  # gündəlik hədəf: kart təkrarı sayı (0 = söndürülü)
+
+
+def find_in_chat(title, messages, query):
+    """Söhbətdə sorğunu axtarır (hərf böyüklüyünə və ə/e kimi fərqlərə həssas deyil). Tapılsa qısa kontekst qaytarır."""
+    import hybrid
+    q = hybrid.fold(query).strip()
+    if not q:
+        return None
+    if q in hybrid.fold(title):
+        return title or ""
+    for m in messages or []:
+        txt = (m.get("content") if isinstance(m, dict) else str(m)) or ""
+        i = hybrid.fold(txt).find(q)
+        if i >= 0:
+            a = max(0, i - 30)
+            return ("…" if a else "") + txt[a:i + len(q) + 70].replace("\n", " ")
+    return None
+
+
 def schedule(card, grade, today=None):
     """SM-2 tipli sadə cədvəl. grade: 0 Yenidən, 1 Çətin, 2 Yaxşı, 3 Asan. Yenilənən sahələri qaytarır."""
     today = today or baku_today()
@@ -186,6 +206,25 @@ class LocalStore:
             if c:
                 out.append({"id": c["id"], "title": c.get("title") or "...", "updated": c.get("updated", 0)})
         return sorted(out, key=lambda x: x["updated"], reverse=True)[:40]
+
+    def search_chats(self, key, query, limit=15):
+        out = []
+        for c in self.list_chats_full(key):
+            snip = find_in_chat(c.get("title"), c.get("messages"), query)
+            if snip is not None:
+                out.append({"id": c["id"], "title": c.get("title") or "...", "snippet": snip})
+            if len(out) >= limit:
+                break
+        return out
+
+    def list_chats_full(self, key):
+        rows = []
+        for fn in os.listdir(self._chat_dir(key)):
+            if fn.endswith(".json"):
+                c = self.load_chat(key, fn[:-5])
+                if c:
+                    rows.append(c)
+        return sorted(rows, key=lambda x: x.get("updated", 0), reverse=True)
 
     def delete_chat(self, key, cid):
         if cid and CHAT_ID_RE.match(cid):
@@ -310,6 +349,47 @@ class LocalStore:
             log = {}
         return {d: {"reviews": sum(v.values()), "questions": 0} for d, v in log.items()}
 
+    def _prefs_path(self):
+        os.makedirs(os.path.join(self.base, "cards"), exist_ok=True)
+        return os.path.join(self.base, "cards", "_prefs.json")
+
+    def get_prefs(self):
+        try:
+            with open(self._prefs_path(), encoding="utf-8") as f:
+                p = json.load(f)
+            return p if isinstance(p, dict) else {}
+        except Exception:
+            return {}
+
+    def set_prefs(self, prefs):
+        try:
+            if len(json.dumps(prefs, ensure_ascii=False)) > 20000:
+                return False
+            with open(self._prefs_path(), "w", encoding="utf-8") as f:
+                json.dump(prefs, f, ensure_ascii=False)
+            return True
+        except Exception:
+            return False
+
+    def _goal_path(self):
+        os.makedirs(os.path.join(self.base, "cards"), exist_ok=True)
+        return os.path.join(self.base, "cards", "_goal.json")
+
+    def get_goal(self):
+        try:
+            with open(self._goal_path(), encoding="utf-8") as f:
+                return max(0, min(200, int(json.load(f).get("goal", DEFAULT_GOAL))))
+        except Exception:
+            return DEFAULT_GOAL
+
+    def set_goal(self, n):
+        try:
+            with open(self._goal_path(), "w", encoding="utf-8") as f:
+                json.dump({"goal": max(0, min(200, int(n)))}, f)
+            return True
+        except Exception:
+            return False
+
     def owner_overview(self, days=7):
         return None
 
@@ -376,6 +456,18 @@ class SupabaseStore:
             "updated_at": now_iso(),
         }).execute()
 
+    def search_chats(self, key, query, limit=15):
+        rows = (self._db().table("chats").select("id,title,messages").eq("subject", key)
+                .order("updated_at", desc=True).limit(150).execute().data) or []
+        out = []
+        for r in rows:
+            snip = find_in_chat(r.get("title"), r.get("messages"), query)
+            if snip is not None:
+                out.append({"id": r["id"], "title": r.get("title") or "...", "snippet": snip})
+            if len(out) >= limit:
+                break
+        return out
+
     def delete_chat(self, key, cid):
         if self._is_uuid(cid):
             self._db().table("chats").delete().eq("id", cid).execute()
@@ -423,6 +515,48 @@ class SupabaseStore:
 
     def set_about(self, text):
         self._db().table("profiles").update({"about": (text or "")[:600]}).eq("id", self.user_id).execute()
+
+    def get_prefs(self):
+        try:
+            rows = (self._db().table("profiles").select("prefs").eq("id", self.user_id)
+                    .limit(1).execute().data) or []
+            p = rows[0].get("prefs") if rows else None
+            return p if isinstance(p, dict) else {}
+        except SessionExpired:
+            raise
+        except Exception:  # prefs sütunu hələ yaradılmayıb
+            return {}
+
+    def set_prefs(self, prefs):
+        try:
+            if len(json.dumps(prefs, ensure_ascii=False)) > 20000:
+                return False
+            self._db().table("profiles").update({"prefs": prefs}).eq("id", self.user_id).execute()
+            return True
+        except SessionExpired:
+            raise
+        except Exception:
+            return False
+
+    def get_goal(self):
+        try:
+            rows = (self._db().table("profiles").select("goal").eq("id", self.user_id)
+                    .limit(1).execute().data) or []
+            g = rows[0].get("goal") if rows else None
+            return DEFAULT_GOAL if g is None else max(0, min(200, int(g)))
+        except SessionExpired:
+            raise
+        except Exception:  # goal sütunu hələ yaradılmayıb
+            return DEFAULT_GOAL
+
+    def set_goal(self, n):
+        try:
+            self._db().table("profiles").update({"goal": max(0, min(200, int(n)))}).eq("id", self.user_id).execute()
+            return True
+        except SessionExpired:
+            raise
+        except Exception:
+            return False
 
     # ---- istifadə sayğacı
     def usage_today(self):
