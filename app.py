@@ -730,22 +730,39 @@ def cookie_write(value):
         "}catch(e){}</script>", height=0)
 
 
+_cookie_reader = None
+
+
 def cookie_read():
-    try:
-        return st.context.cookies.get(COOKIE) or None
-    except Exception:
-        return None
+    """Brauzerdəki kukini kiçik komponentlə oxuyur (Streamlit Cloud kukiləri serverə ötürmür).
+    İlk çağırışda None qaytarır (komponent hələ cavab verməyib); sonra {"rt": "..."}."""
+    global _cookie_reader
+    import streamlit.components.v1 as components
+    if _cookie_reader is None:
+        _cookie_reader = components.declare_component(
+            "tk_cookie", path=os.path.join(os.path.dirname(os.path.abspath(__file__)), "cookie_comp"))
+    return _cookie_reader(key="tk_cookie_reader", default=None)
 
 
 def try_restore():
-    """Səhifə yenilənəndə kukidəki yeniləmə tokeni ilə girişi bərpa edir (bir sessiyada yalnız bir dəfə)."""
+    """Səhifə yenilənəndə kukidəki yeniləmə tokeni ilə girişi bərpa edir (bir sessiyada yalnız bir dəfə).
+    Komponentin cavabını gözləyərkən səhifəni dayandırır."""
     ss = st.session_state
     if ss.get("restore_tried"):
         return False
+    try:
+        val = cookie_read()
+    except Exception as e:
+        ss["restore_tried"] = True
+        ss["restore_dbg"] = f"komponent xətası: {type(e).__name__}"
+        return False
+    if val is None:  # komponent hələ cavab verməyib
+        st.markdown(themes.hero("Tutor Komandam", ""), unsafe_allow_html=True)
+        st.stop()
     ss["restore_tried"] = True
-    rt = cookie_read()
+    rt = (val or {}).get("rt") if isinstance(val, dict) else None
     if not rt:
-        ss["restore_dbg"] = "kuki serverə gəlmir"
+        ss["restore_dbg"] = "kuki yoxdur"
         return False
     try:
         sb = store.make_client()
@@ -880,12 +897,8 @@ def login_screen():
         if go2:
             do_signup(email2, pw_a, pw_b, code)
     st.caption(t("privacy"))
-    if st.query_params.get("debug") == "1":  # diaqnostika: yalnız kuki adları, dəyərlər yox
-        try:
-            names = list(st.context.cookies.keys())
-        except Exception as e:
-            names = [f"xəta: {type(e).__name__}"]
-        st.caption(f"debug: kukilər={names} | bərpa={st.session_state.get('restore_dbg')}")
+    if st.query_params.get("debug") == "1":  # diaqnostika: token dəyəri göstərilmir
+        st.caption(f"debug: bərpa={st.session_state.get('restore_dbg')}")
 
 
 def username_screen(stor):

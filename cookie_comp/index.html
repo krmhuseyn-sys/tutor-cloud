@@ -1,0 +1,36 @@
+<!doctype html>
+<html><head><meta charset="utf-8"></head><body style="margin:0"><script>
+// Streamlit komponent protokolu (kitabxanasız). Brauzer kukisini oxuyub Python-a qaytarır.
+(function () {
+  var NAME = "tk_rt";
+  function send(type, data) {
+    var m = { isStreamlitMessage: true, type: type };
+    for (var k in data) m[k] = data[k];
+    window.parent.postMessage(m, "*");
+  }
+  function readCookie() {
+    var docs = [];
+    try { docs.push(window.parent.document); } catch (e) {}
+    docs.push(document);
+    for (var i = 0; i < docs.length; i++) {
+      try {
+        var parts = docs[i].cookie.split(";");
+        for (var j = 0; j < parts.length; j++) {
+          var p = parts[j].trim();
+          if (p.indexOf(NAME + "=") === 0) return decodeURIComponent(p.substring(NAME.length + 1));
+        }
+      } catch (e) {}
+    }
+    return "";
+  }
+  var done = false;
+  window.addEventListener("message", function (ev) {
+    if (!ev.data || ev.data.type !== "streamlit:render") return;
+    if (done) return;
+    done = true;
+    send("streamlit:setFrameHeight", { height: 0 });
+    send("streamlit:setComponentValue", { value: { rt: readCookie() }, dataType: "json" });
+  });
+  send("streamlit:componentReady", { apiVersion: 1 });
+})();
+</script></body></html>
