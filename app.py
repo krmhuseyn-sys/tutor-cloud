@@ -1577,10 +1577,22 @@ CT = {
         "d_streak": "Seriya (gün)", "d_due": "Bu gün təkrar", "d_mastered": "Öyrənilmiş kart", "d_week": "Bu həftə təkrar",
         "d_mastered_help": "Növbəti təkrarı 21 gündən çox olan kartlar",
         "d_subjects": "Fənn üzrə irəliləyiş", "d_prog": "{m}/{t} öyrənilib · {d} bu gün təkrar · {c} söhbət",
-        "d_chart": "Son 14 gün", "d_reviews": "Təkrar", "d_questions": "Suallar",
+        "d_chart": "Son 14 gün", "d_chart_r": "Fəaliyyət: {r}", "d_reviews": "Təkrar", "d_questions": "Suallar",
         "d_forecast": "Növbəti 7 gün: təkrar gələn kartlar", "d_today_short": "bu gün",
         "d_weak": "Çətin kartlar", "d_weak_empty": "Hələ çətin kart yoxdur.", "d_lapses": "səhv",
         "d_nodata": "Hələ data yoxdur: kart yarat və ya sual ver.",
+        "r1": "1 gün", "r7": "7 gün", "r28": "28 gün", "r0": "Bütün zaman",
+        "d_rev_r": "Təkrar (dövr)", "d_q_r": "Suallar (dövr)", "d_days_r": "Aktiv gün",
+        "o_active": "Aktiv istifadəçi", "o_new": "Yeni istifadəçi", "o_cards_new": "Yeni kart", "o_rev": "Təkrar",
+        "o_chats_r": "Aktiv söhbət", "o_per_user": "İstifadəçi başına sual", "o_h_range": "Dövr", "o_weekly": "həftəlik cəm",
+        "view_owner": "🛠 Sahib", "o_title": "🛠 Sahib paneli",
+        "o_users": "İstifadəçi", "o_new7": "Son 7 gündə yeni", "o_today_q": "Bu gün sual", "o_cards": "Cəmi kart",
+        "o_rev7": "Son 7 gün təkrar", "o_chats": "Söhbət", "o_chart": "Son 14 gün: suallar və aktiv istifadəçilər",
+        "o_q": "Suallar", "o_u": "Aktiv istifadəçi", "o_tbl": "İstifadəçilər (yalnız ad və say)",
+        "o_h_user": "İstifadəçi", "o_h_today": "Bu gün", "o_h_week": "7 gün", "o_h_last": "Son aktiv",
+        "o_limit": "Gündəlik limit: {n} sual", "o_near": "⚠️ limitə yaxın", "o_avg": "Aktiv gündə orta sual",
+        "o_need_sql": "Sahib paneli işləmir. Supabase-də owner_only.sql işlədilməyib və ya e-poçtun owners cədvəlinə əlavə olunmayıb.",
+        "o_local": "Sahib paneli yalnız hesab sistemi (Supabase) ilə işləyir.",
     },
     "en": {
         "view": "Section", "view_chat": "💬 Chat", "view_cards": "🃏 Cards",
@@ -1599,10 +1611,22 @@ CT = {
         "d_streak": "Streak (days)", "d_due": "Due today", "d_mastered": "Mastered cards", "d_week": "Reviews this week",
         "d_mastered_help": "Cards whose next review is more than 21 days away",
         "d_subjects": "Progress by subject", "d_prog": "{m}/{t} mastered · {d} due today · {c} chats",
-        "d_chart": "Last 14 days", "d_reviews": "Reviews", "d_questions": "Questions",
+        "d_chart": "Last 14 days", "d_chart_r": "Activity: {r}", "d_reviews": "Reviews", "d_questions": "Questions",
         "d_forecast": "Next 7 days: cards coming due", "d_today_short": "today",
         "d_weak": "Hard cards", "d_weak_empty": "No hard cards yet.", "d_lapses": "misses",
         "d_nodata": "No data yet: create cards or ask a question.",
+        "r1": "1 day", "r7": "7 days", "r28": "28 days", "r0": "All time",
+        "d_rev_r": "Reviews (period)", "d_q_r": "Questions (period)", "d_days_r": "Active days",
+        "o_active": "Active users", "o_new": "New users", "o_cards_new": "New cards", "o_rev": "Reviews",
+        "o_chats_r": "Active chats", "o_per_user": "Questions per user", "o_h_range": "Period", "o_weekly": "weekly totals",
+        "view_owner": "🛠 Owner", "o_title": "🛠 Owner dashboard",
+        "o_users": "Users", "o_new7": "New in 7 days", "o_today_q": "Questions today", "o_cards": "Total cards",
+        "o_rev7": "Reviews, 7 days", "o_chats": "Chats", "o_chart": "Last 14 days: questions and active users",
+        "o_q": "Questions", "o_u": "Active users", "o_tbl": "Users (names and counts only)",
+        "o_h_user": "User", "o_h_today": "Today", "o_h_week": "7 days", "o_h_last": "Last active",
+        "o_limit": "Daily limit: {n} questions", "o_near": "⚠️ near the limit", "o_avg": "Avg questions per active day",
+        "o_need_sql": "The owner dashboard is not working. owner_only.sql was not run in Supabase or your email is not in the owners table.",
+        "o_local": "The owner dashboard works only with the account system (Supabase).",
     },
 }
 
@@ -1805,6 +1829,36 @@ def _pal():
     return themes.THEMES[themes.valid_theme(cur_theme())]
 
 
+def range_select(key):
+    """Zaman aralığı: 1, 7, 28 gün və ya bütün zaman (0)."""
+    return st.radio("range", [1, 7, 28, 0], index=1, key=key, horizontal=True,
+                    format_func=lambda d: ct(f"r{d}"), label_visibility="collapsed")
+
+
+def range_start(sel, today):
+    """Seçilən dövrün ilk günü (bütün zaman üçün çox köhnə tarix)."""
+    return "2000-01-01" if sel == 0 else store.add_days(today, -(sel - 1))
+
+
+def chart_rows(per_day, today, sel, names):
+    """Qrafik sətirləri. per_day: {gün: {açar: dəyər}}, names: [(açar, ad, cəmlənə_bilər)].
+    1 gün seçiləndə kontekst üçün 7 gün, bütün zamanda 365 gün (həftəlik cəm) göstərilir."""
+    n = 7 if sel == 1 else (365 if sel == 0 else sel)
+    days = [store.add_days(today, -i) for i in range(n - 1, -1, -1)]
+    if n <= 60:
+        return [{"day": d[5:], "series": label, "value": (per_day.get(d) or {}).get(k, 0)}
+                for d in days for k, label, _ in names]
+    rows_ = []
+    first = len(days) % 7
+    chunks = ([days[:first]] if first else []) + [days[i:i + 7] for i in range(first, len(days), 7)]
+    for chunk in chunks:
+        for k, label, additive in names:
+            if additive:
+                rows_.append({"day": chunk[0][5:], "series": label,
+                              "value": sum((per_day.get(d) or {}).get(k, 0) for d in chunk)})
+    return rows_
+
+
 def themed_bars(rows_):
     """Tema rənglərində, fonsuz yığılmış sütun qrafiki. rows_: [{"day","series","value"}, ...]."""
     p = _pal()
@@ -1851,21 +1905,29 @@ def themed_progress(frac, caption):
 
 def dashboard_page(S_):
     st.title(ct("d_title"))
+    sel = range_select("d_range")
     rows = sc(S_.card_stats, default=[]) or []
-    act = sc(S_.activity, 60, default={}) or {}
+    act = sc(S_.activity, 730 if sel == 0 else 60, default={}) or {}
     chats = sc(S_.chat_counts, default={}) or {}
     today = store.baku_today()
     if not rows and not act and not chats:
         st.info(ct("d_nodata"))
         return
+    start = range_start(sel, today)
+    in_range = {d: v for d, v in act.items() if start <= d <= today}
+    rev_r = sum(v.get("reviews", 0) for v in in_range.values())
+    q_r = sum(v.get("questions", 0) for v in in_range.values())
+    days_r = sum(1 for v in in_range.values() if v.get("reviews", 0) + v.get("questions", 0) > 0)
     due_all = sum(1 for r in rows if str(r.get("due") or "") <= today)
     mastered = sum(1 for r in rows if int(r.get("interval_days") or 0) >= 21)
-    week = sum((act.get(store.add_days(today, -i)) or {}).get("reviews", 0) for i in range(7))
-    c1, c2, c3, c4 = st.columns(4)
+    c1, c2, c3 = st.columns(3)
     c1.metric("🔥 " + ct("d_streak"), store.streak(act, today))
     c2.metric(ct("d_due"), due_all)
     c3.metric(ct("d_mastered"), mastered, help=ct("d_mastered_help"))
-    c4.metric(ct("d_week"), week)
+    c4, c5, c6 = st.columns(3)
+    c4.metric(ct("d_rev_r"), rev_r)
+    c5.metric(ct("d_q_r"), q_r)
+    c6.metric(ct("d_days_r"), days_r)
 
     st.subheader(ct("d_subjects"))
     for k_ in SUBJ_KEYS:
@@ -1878,13 +1940,8 @@ def dashboard_page(S_):
         st.markdown(f"**{subj_name(k_)}**")
         themed_progress(m_ / len(sub) if sub else 0.0, ct("d_prog", m=m_, t=len(sub), d=d_, c=n_chat))
 
-    days14 = [store.add_days(today, -i) for i in range(13, -1, -1)]
-    rows14 = []
-    for d in days14:
-        a_ = act.get(d) or {}
-        rows14.append({"day": d[5:], "series": ct("d_reviews"), "value": a_.get("reviews", 0)})
-        rows14.append({"day": d[5:], "series": ct("d_questions"), "value": a_.get("questions", 0)})
-    st.subheader(ct("d_chart"))
+    rows14 = chart_rows(act, today, sel, [("reviews", ct("d_reviews"), True), ("questions", ct("d_questions"), True)])
+    st.subheader(ct("d_chart_r", r=ct(f"r{sel}")) if "d_chart_r" in CT["az"] else ct("d_chart"))
     themed_bars(rows14)
     fc_rows = []
     for i in range(7):
@@ -1902,6 +1959,56 @@ def dashboard_page(S_):
     for r in weak:
         st.markdown(f"- **{(r.get('front') or '')[:110]}** · {subj_name(r['subject'])} · "
                     f"{r.get('lapses')} {ct('d_lapses')}")
+
+
+def owner_page(S_):
+    st.title(ct("o_title"))
+    if not AUTH_ON:
+        st.info(ct("o_local"))
+        return
+    sel = range_select("o_range")
+    try:
+        data = S_.owner_overview(sel)
+    except store.SessionExpired:
+        drop_login()
+        st.rerun()
+    except Exception:
+        data = None
+    if not isinstance(data, dict):
+        st.warning(ct("o_need_sql"))
+        return
+    today = store.baku_today()
+    daily = {r["day"]: {"questions": r.get("questions", 0), "users": r.get("users", 0)}
+             for r in data.get("daily", [])}
+    qn = data.get("questions", 0)
+    au = data.get("active_users", 0)
+    c1, c2, c3 = st.columns(3)
+    c1.metric(ct("o_users"), data.get("users_total", 0))
+    c2.metric(ct("o_new"), data.get("users_new", 0))
+    c3.metric(ct("o_active"), au)
+    c4, c5, c6 = st.columns(3)
+    c4.metric(ct("o_q"), qn)
+    c5.metric(ct("o_per_user"), f"{qn / au:.1f}" if au else "-")
+    c6.metric(ct("o_today_q"), (daily.get(today) or {}).get("questions", 0))
+    c7, c8, c9 = st.columns(3)
+    c7.metric(ct("o_cards_new"), data.get("cards_new", 0), help=f"{ct('o_cards')}: {data.get('cards', 0)}")
+    c8.metric(ct("o_rev"), data.get("reviews", 0))
+    c9.metric(ct("o_chats_r"), data.get("chats", 0))
+
+    weekly = sel == 0
+    names = [("questions", ct("o_q"), True)] + ([] if weekly else [("users", ct("o_u"), False)])
+    st.subheader(ct("o_chart") if not weekly else f"{ct('o_q')}: {ct('o_weekly')}")
+    themed_bars(chart_rows(daily, today, sel, names))
+    st.caption(ct("o_limit", n=DAILY_QUESTIONS))
+
+    users = data.get("users", [])
+    st.subheader(ct("o_tbl"))
+    lines = [f"| {ct('o_h_user')} | {ct('o_h_range')} | {ct('o_h_today')} | {ct('o_h_last')} |", "|---|---:|---:|---|"]
+    for u in users:
+        flag = " " + ct("o_near") if u.get("today", 0) >= 0.8 * DAILY_QUESTIONS else ""
+        uname = re.sub(r"[^a-z0-9_]", "", str(u.get("username", "")).lower())
+        lines.append(f"| @{uname} | {u.get('range', 0)} | {u.get('today', 0)}{flag} | {u.get('last_day') or '-'} |")
+    st.markdown("\n".join(lines))
 
 
 def cards_page(S_, key):
@@ -1951,7 +2058,8 @@ choice = st.sidebar.selectbox(
 web_on = st.sidebar.toggle(t("web"), value=False)
 
 key = st.sidebar.selectbox(t("subject"), SUBJ_KEYS, format_func=subj_name)
-view = st.sidebar.radio(ct("view"), ["chat", "cards", "stats"], key="view", horizontal=True,
+_views = ["chat", "cards", "stats"] + (["owner"] if (AUTH_ON and IS_OWNER) else [])
+view = st.sidebar.radio(ct("view"), _views, key="view", horizontal=True,
                         format_func=lambda v: ct("view_" + v))
 mode = st.sidebar.radio(t("mode"), ["learn", "practice", "exam"], format_func=lambda k: t("m_" + k))
 verify = st.sidebar.toggle(t("verify"), value=False)
@@ -1967,6 +2075,9 @@ if view == "cards":
     st.stop()
 if view == "stats":
     dashboard_page(S)
+    st.stop()
+if view == "owner" and AUTH_ON and IS_OWNER:
+    owner_page(S)
     st.stop()
 
 # ======================= TUTOR SƏHİFƏSİ =======================

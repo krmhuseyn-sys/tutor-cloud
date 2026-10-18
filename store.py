@@ -310,6 +310,9 @@ class LocalStore:
             log = {}
         return {d: {"reviews": sum(v.values()), "questions": 0} for d, v in log.items()}
 
+    def owner_overview(self, days=7):
+        return None
+
     def chat_counts(self):
         out = {}
         base = os.path.join(self.base, "chats")
@@ -503,6 +506,11 @@ class SupabaseStore:
             d = out.setdefault(r["day"], {"reviews": 0, "questions": 0})
             d["questions"] += r["count"]
         return out
+
+    def owner_overview(self, days=7):
+        """Yalnız sahib üçün (Supabase funksiyası özü yoxlayır). days: 1, 7, 28; 0 = bütün zaman."""
+        res = self._db().rpc("owner_overview", {"p_days": int(days)}).execute()
+        return res.data
 
     def chat_counts(self):
         rows = (self._db().table("chats").select("subject").limit(3000).execute().data) or []
