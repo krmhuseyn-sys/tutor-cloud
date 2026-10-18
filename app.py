@@ -1558,6 +1558,250 @@ def attach_menu():
             st.rerun()
 
 
+# ======================= 🃏 KARTLAR (aralıq təkrar) =======================
+CT = {
+    "az": {
+        "view": "Bölmə", "view_chat": "💬 Söhbət", "view_cards": "🃏 Kartlar",
+        "c_due": "Bu gün təkrar", "c_total": "Cəmi kart",
+        "c_tab_rev": "Təkrar", "c_tab_new": "Yarat", "c_tab_list": "Siyahı",
+        "c_start": "Təkrara başla ({n})", "c_none_due": "Bu gün təkrar ediləcək kart yoxdur. Yeni kart yarada bilərsən.",
+        "c_show": "Cavabı göstər", "c_again": "Yenidən", "c_hard": "Çətin", "c_good": "Yaxşı", "c_easy": "Asan",
+        "c_done": "Bu günlük təkrar bitdi! 🎉", "c_left": "Qalan: ",
+        "c_topic": "Mövzu (məsələn: veb-server və brauzer)", "c_count": "Kart sayı", "c_make": "Kart yarat",
+        "c_made": "{n} yeni kart əlavə olundu.", "c_made0": "Yeni kart əlavə olunmadı (təkrarlar atıldı və ya cavab oxunmadı).",
+        "c_nomat": "Bu hesabda kitab materialları bağlıdır; kartlar ümumi biliklə yaradılacaq.",
+        "c_topic_need": "Mövzunu yaz.", "c_from_ans_help": "Bu cavabdan kart yarat",
+        "c_del": "Sil", "c_empty": "Hələ kart yoxdur.", "c_src": "Mənbə", "c_next": "Növbəti təkrar: ",
+        "c_gen_fail": "Kartları oxuya bilmədim, bir də cəhd et.", "c_spin": "Kartlar hazırlanır...",
+    },
+    "en": {
+        "view": "Section", "view_chat": "💬 Chat", "view_cards": "🃏 Cards",
+        "c_due": "Due today", "c_total": "Total cards",
+        "c_tab_rev": "Review", "c_tab_new": "Create", "c_tab_list": "List",
+        "c_start": "Start review ({n})", "c_none_due": "No cards due today. You can create new ones.",
+        "c_show": "Show answer", "c_again": "Again", "c_hard": "Hard", "c_good": "Good", "c_easy": "Easy",
+        "c_done": "Today's review is done! 🎉", "c_left": "Left: ",
+        "c_topic": "Topic (e.g. web server and browser)", "c_count": "Number of cards", "c_make": "Create cards",
+        "c_made": "{n} new cards added.", "c_made0": "No new cards were added (duplicates skipped or the reply could not be read).",
+        "c_nomat": "Course book materials are not available on this account; cards will use general knowledge.",
+        "c_topic_need": "Write the topic.", "c_from_ans_help": "Make cards from this answer",
+        "c_del": "Delete", "c_empty": "No cards yet.", "c_src": "Source", "c_next": "Next review: ",
+        "c_gen_fail": "I could not read the cards, try once more.", "c_spin": "Preparing cards...",
+    },
+}
+
+
+def ct(k, **kw):
+    d = CT.get(st.session_state.get("ui", "az"), CT["az"])
+    txt = d.get(k, CT["az"].get(k, k))
+    return txt.format(**kw) if kw else txt
+
+
+CARD_SYS = (
+    "You create study flashcards for a university student. Output ONLY a JSON array, with no prose and no code fences. "
+    'Each item has the form {"front": "...", "back": "...", "ref": 2}. '
+    "front is one self-contained question or term (never say 'the text' or 'the passage'). "
+    "back is the correct answer in 1-3 short sentences. "
+    "Use only facts from the given MATERIALS or SOURCE TEXT when present; otherwise use well-established textbook knowledge. "
+    "ref is the number of the MATERIALS item the card is based on, or null. "
+    "Cover different ideas, no duplicates, no trick questions."
+)
+
+
+def parse_cards(raw, n):
+    sx = (raw or "").strip()
+    sx = re.sub(r"^```[a-zA-Z]*\s*|\s*```$", "", sx)
+    a, b = sx.find("["), sx.rfind("]")
+    if a < 0 or b <= a:
+        return []
+    try:
+        data = json.loads(sx[a:b + 1])
+    except Exception:
+        return []
+    out = []
+    for d_ in data if isinstance(data, list) else []:
+        if isinstance(d_, dict) and d_.get("front") and d_.get("back"):
+            out.append({"front": str(d_["front"]), "back": str(d_["back"]), "ref": d_.get("ref")})
+    return out[:n]
+
+
+def retrieve_raw(key, q, n=8):
+    """retrieve() kimi, amma tam parça mətnlərini qaytarır: [(mətn, meta), ...]."""
+    if key == "gen":
+        return []
+    try:
+        col = db.get_collection("c_" + key)
+        total = col.count()
+        if total == 0:
+            return []
+        r = col.query(query_embeddings=[embed_cached(q[:1000])], n_results=min(n, total))
+        return list(zip(r["documents"][0], r["metadatas"][0]))
+    except Exception:
+        return []
+
+
+def make_cards(key, topic, n, text=None):
+    lang = "English" if key in EN_SUBJ else "Azerbaijani"
+    items = [] if text else (retrieve_raw(key, topic, 8) if IS_OWNER else [])
+    if text:
+        material = "SOURCE TEXT:\n" + text[:6000]
+    elif items:
+        material = "MATERIALS (numbered):\n" + "\n\n".join(
+            f"[{i}] ({m['src']}, p.{m['page']})\n{d_}" for i, (d_, m) in enumerate(items, 1))
+    else:
+        material = "(no materials available: use well-established textbook knowledge about the subject)"
+    prompt = (f"Subject: {subj_name(key)}\nTopic: {topic or 'the main ideas of the source text'}\n"
+              f"Write {n} flashcards in {lang}.\n\n{material}")
+    raw = ask_msgs(CARD_SYS, [{"role": "user", "content": prompt}], free_plan(), 0.3)
+    cards = parse_cards(raw, n)
+    for c in cards:
+        ref = c.pop("ref", None)
+        if items and isinstance(ref, int) and 1 <= ref <= len(items):
+            c["src"], c["page"] = items[ref - 1][1]["src"], items[ref - 1][1]["page"]
+    return cards
+
+
+def quota_left():
+    return not (AUTH_ON and USER_USAGE.get("question", 0) >= DAILY_QUESTIONS)
+
+
+def create_cards(S_, key, topic, n, text=None):
+    """Kartları yaradır və saxlayır. Əlavə olunan sayı qaytarır (xəta olarsa None)."""
+    try:
+        with st.spinner(ct("c_spin")):
+            cards = make_cards(key, topic, n, text)
+    except Exception as e:
+        st.error(friendly(e))
+        return None
+    if not cards:
+        st.warning(ct("c_gen_fail"))
+        return None
+    added = sc(S_.add_cards, key, cards, default=0)
+    if AUTH_ON:
+        sc(S_.bump, "question")
+    return added
+
+
+def _rv(key):
+    rv = st.session_state.get("rv")
+    if not rv or rv.get("key") != key:
+        rv = st.session_state["rv"] = {"key": key, "queue": [], "show": False, "done": 0, "active": False}
+    return rv
+
+
+def cb_rv_start(S_, key):
+    cards = sc(S_.due_cards, key, 20, default=[])
+    _rv(key).update(queue=list(cards), show=False, done=0, active=bool(cards))
+
+
+def cb_rv_show(key):
+    _rv(key)["show"] = True
+
+
+def cb_rv_grade(S_, key, grade):
+    rv = _rv(key)
+    if not rv["queue"]:
+        return
+    card = rv["queue"].pop(0)
+    new = sc(S_.review_card, key, card, grade, default=None) or {}
+    rv["done"] += 1
+    if grade == 0:
+        rv["queue"].append({**card, **new})  # "Yenidən": bu seansın sonunda təkrar gəlir
+    rv["show"] = False
+
+
+def cb_card_del(S_, key, card_id):
+    sc(S_.delete_card, key, card_id)
+
+
+def review_ui(S_, key, cnt):
+    rv = _rv(key)
+    if rv["active"] and not rv["queue"]:
+        st.success(ct("c_done"))
+        rv["active"] = False
+    if not rv["active"]:
+        if cnt["due"]:
+            st.button(ct("c_start", n=min(cnt["due"], 20)), key="rv_start", type="primary",
+                      on_click=cb_rv_start, args=(S_, key))
+        else:
+            st.info(ct("c_none_due"))
+        return
+    card = rv["queue"][0]
+    st.caption(ct("c_left") + str(len(rv["queue"])))
+    with st.container(border=True):
+        st.markdown(fix_math(card["front"]))
+    if not rv["show"]:
+        st.button(ct("c_show"), key="rv_show", type="primary", on_click=cb_rv_show, args=(key,))
+        return
+    with st.container(border=True):
+        st.markdown(fix_math(card["back"]))
+        if card.get("src"):
+            pg = f", {t('page_word')} {card['page']}" if card.get("page") else ""
+            st.caption(f"{ct('c_src')}: {card['src']}{pg}")
+    cols = st.columns(4)
+    for g_, lab_ in enumerate(("c_again", "c_hard", "c_good", "c_easy")):
+        wide(cols[g_].button, ct(lab_), key=f"rv_g{g_}", on_click=cb_rv_grade, args=(S_, key, g_))
+
+
+def new_cards_ui(S_, key):
+    if AUTH_ON and not IS_OWNER and key != "gen":
+        st.caption(ct("c_nomat"))
+    with st.form("cards_new"):
+        topic = st.text_input(ct("c_topic"), max_chars=200)
+        n = st.slider(ct("c_count"), 3, 12, 6)
+        go = st.form_submit_button(ct("c_make"))
+    if not go:
+        return
+    if len((topic or "").strip()) < 3:
+        st.warning(ct("c_topic_need"))
+        return
+    if not quota_left():
+        st.warning(t("quota_hit"))
+        return
+    added = create_cards(S_, key, topic.strip(), n)
+    if added is None:
+        return
+    if added:
+        st.session_state["cards_flash"] = ct("c_made", n=added)
+        st.rerun()
+    else:
+        st.info(ct("c_made0"))
+
+
+def list_cards_ui(S_, key):
+    rows = sc(S_.list_cards, key, 100, default=[])
+    if not rows:
+        st.caption(ct("c_empty"))
+        return
+    for r in rows:
+        with st.expander((r["front"] or "")[:90]):
+            st.markdown(fix_math(r["back"]))
+            meta = []
+            if r.get("src"):
+                meta.append(f"{r['src']}" + (f", {t('page_word')} {r['page']}" if r.get("page") else ""))
+            meta.append(ct("c_next") + str(r.get("due", "")))
+            st.caption(" · ".join(meta))
+            st.button(ct("c_del"), key=f"cd_{r['id']}", on_click=cb_card_del, args=(S_, key, r["id"]))
+
+
+def cards_page(S_, key):
+    st.title("🃏 " + subj_name(key))
+    flash = st.session_state.pop("cards_flash", None)
+    if flash:
+        st.success(flash)
+    cnt = sc(S_.card_counts, key, default={"total": 0, "due": 0}) or {"total": 0, "due": 0}
+    c1, c2 = st.columns(2)
+    c1.metric(ct("c_due"), cnt["due"])
+    c2.metric(ct("c_total"), cnt["total"])
+    tab_r, tab_n, tab_l = st.tabs([ct("c_tab_rev"), ct("c_tab_new"), ct("c_tab_list")])
+    with tab_r:
+        review_ui(S_, key, cnt)
+    with tab_n:
+        new_cards_ui(S_, key)
+    with tab_l:
+        list_cards_ui(S_, key)
+
+
 # ======================= SAXLAMA VƏ GİRİŞ =======================
 if AUTH_ON:
     S = auth_gate()
@@ -1587,6 +1831,8 @@ choice = st.sidebar.selectbox(
 web_on = st.sidebar.toggle(t("web"), value=False)
 
 key = st.sidebar.selectbox(t("subject"), SUBJ_KEYS, format_func=subj_name)
+view = st.sidebar.radio(ct("view"), ["chat", "cards"], key="view", horizontal=True,
+                        format_func=lambda v: ct("view_" + v))
 mode = st.sidebar.radio(t("mode"), ["learn", "practice", "exam"], format_func=lambda k: t("m_" + k))
 verify = st.sidebar.toggle(t("verify"), value=False)
 speak_on = st.sidebar.toggle(t("speak"), value=False)
@@ -1595,6 +1841,10 @@ if st.sidebar.button(t("voice_test")):
     d_, e_ = speak(t("voice_test_text"), key)
     show_audio(d_, e_, True, st.sidebar)
 list_box = st.sidebar.container()
+
+if view == "cards":
+    cards_page(S, key)
+    st.stop()
 
 # ======================= TUTOR SƏHİFƏSİ =======================
 if st.session_state.get("cur_key") != key:
@@ -1620,9 +1870,17 @@ for i, m in enumerate(chat["messages"]):
                 show_sources(m["sources"], key, f"{chat['id']}_{i}")
         show_web_sources(m.get("web"))
         if m["role"] == "assistant":
-            if st.button("🔊", key=f"spk_{chat['id']}_{i}", help=t("read")):
+            b_spk, b_crd, _sp = st.columns([1, 1, 8])
+            if b_spk.button("🔊", key=f"spk_{chat['id']}_{i}", help=t("read")):
                 d_, e_ = speak(m["content"], key)
                 show_audio(d_, e_, True)
+            if b_crd.button("🃏", key=f"crd_{chat['id']}_{i}", help=ct("c_from_ans_help")):
+                if not quota_left():
+                    st.warning(t("quota_hit"))
+                else:
+                    n_added = create_cards(S, key, "", 4, text=m["content"])
+                    if n_added is not None:
+                        st.toast(ct("c_made", n=n_added) if n_added else ct("c_made0"))
 
 _bottom = getattr(st, "bottom", None) or getattr(st, "_bottom", None)
 if _bottom is not None:

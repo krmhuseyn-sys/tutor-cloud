@@ -71,6 +71,59 @@ def owner_emails():
     return {e.strip().lower() for e in os.getenv("OWNER_EMAILS", "").split(",") if e.strip()}
 
 
+# ---------------------------- kartlar: aralıq təkrar ----------------------------
+CARD_FRONT_MAX, CARD_BACK_MAX, CARD_LIMIT = 500, 1500, 1500
+
+
+def add_days(iso_day, n):
+    return (datetime.date.fromisoformat(iso_day) + datetime.timedelta(days=int(n))).isoformat()
+
+
+def norm_front(text):
+    return re.sub(r"\s+", " ", (text or "").strip().lower())
+
+
+def clean_card(c):
+    """Kartı yoxlayır və təmizləyir; yararsızdırsa None."""
+    front = str(c.get("front", "")).strip()[:CARD_FRONT_MAX]
+    back = str(c.get("back", "")).strip()[:CARD_BACK_MAX]
+    if len(front) < 3 or len(back) < 2:
+        return None
+    try:
+        page = int(c["page"]) if c.get("page") is not None else None
+    except Exception:
+        page = None
+    return {"front": front, "back": back, "src": str(c.get("src") or "")[:200], "page": page}
+
+
+def schedule(card, grade, today=None):
+    """SM-2 tipli sadə cədvəl. grade: 0 Yenidən, 1 Çətin, 2 Yaxşı, 3 Asan. Yenilənən sahələri qaytarır."""
+    today = today or baku_today()
+    ease = float(card.get("ease") or 2.5)
+    interval = int(card.get("interval_days") or 0)
+    reps = int(card.get("reps") or 0)
+    lapses = int(card.get("lapses") or 0)
+    if grade <= 0:
+        lapses += 1
+        reps = 0
+        interval = 0
+        ease = max(1.3, ease - 0.2)
+        due = today
+    else:
+        if grade == 1:
+            interval = max(1, round(interval * 1.2)) if reps else 1
+            ease = max(1.3, ease - 0.15)
+        elif grade == 2:
+            interval = 1 if reps == 0 else (3 if reps == 1 else max(interval + 1, round(interval * ease)))
+        else:
+            interval = 3 if reps == 0 else max(interval + 2, round(max(interval, 1) * ease * 1.3))
+            ease = min(3.0, ease + 0.15)
+        reps += 1
+        interval = min(interval, 365)
+        due = add_days(today, interval)
+    return {"ease": round(ease, 2), "interval_days": interval, "reps": reps, "lapses": lapses, "due": due}
+
+
 # ---------------------------- yerli saxlama ----------------------------
 class LocalStore:
     kind = "local"
@@ -146,6 +199,65 @@ class LocalStore:
 
     def bump(self, provider):
         return None
+
+    # ---- kartlar
+    def _cards_path(self, key):
+        os.makedirs(os.path.join(self.base, "cards"), exist_ok=True)
+        return os.path.join(self.base, "cards", f"{key}.json")
+
+    def _cards_load(self, key):
+        try:
+            with open(self._cards_path(key), encoding="utf-8") as f:
+                data = json.load(f)
+            return data if isinstance(data, list) else []
+        except Exception:
+            return []
+
+    def _cards_save(self, key, rows):
+        path = self._cards_path(key)
+        with open(path + ".tmp", "w", encoding="utf-8") as f:
+            json.dump(rows, f, ensure_ascii=False)
+        os.replace(path + ".tmp", path)
+
+    def add_cards(self, key, cards):
+        rows = self._cards_load(key)
+        seen = {norm_front(r.get("front")) for r in rows}
+        added = 0
+        for c in cards or []:
+            c = clean_card(c)
+            if not c or norm_front(c["front"]) in seen or len(rows) >= CARD_LIMIT:
+                continue
+            seen.add(norm_front(c["front"]))
+            rows.append({**c, "id": uuid.uuid4().hex, "ease": 2.5, "interval_days": 0, "reps": 0,
+                         "lapses": 0, "due": baku_today(), "created": now_iso()})
+            added += 1
+        if added:
+            self._cards_save(key, rows)
+        return added
+
+    def card_counts(self, key):
+        rows, today = self._cards_load(key), baku_today()
+        return {"total": len(rows), "due": sum(1 for r in rows if r.get("due", today) <= today)}
+
+    def due_cards(self, key, limit=20):
+        today = baku_today()
+        rows = [r for r in self._cards_load(key) if r.get("due", today) <= today]
+        return sorted(rows, key=lambda r: r.get("due", ""))[:limit]
+
+    def list_cards(self, key, limit=100):
+        return sorted(self._cards_load(key), key=lambda r: r.get("created", ""), reverse=True)[:limit]
+
+    def review_card(self, key, card, grade):
+        rows, new = self._cards_load(key), schedule(card, grade)
+        for r in rows:
+            if r.get("id") == card.get("id"):
+                r.update(new)
+        self._cards_save(key, rows)
+        return new
+
+    def delete_card(self, key, card_id):
+        rows = [r for r in self._cards_load(key) if r.get("id") != card_id]
+        self._cards_save(key, rows)
 
 
 # ---------------------------- Supabase saxlama ----------------------------
@@ -255,6 +367,49 @@ class SupabaseStore:
 
     def bump(self, provider):
         self._db().rpc("bump_usage", {"p_provider": provider}).execute()
+
+
+    # ---- kartlar
+    def add_cards(self, key, cards):
+        db = self._db()
+        old = (db.table("cards").select("front").eq("subject", key).limit(2000).execute().data) or []
+        if len(old) >= CARD_LIMIT:
+            return 0
+        seen = {norm_front(r["front"]) for r in old}
+        rows = []
+        for c in cards or []:
+            c = clean_card(c)
+            if not c or norm_front(c["front"]) in seen or len(old) + len(rows) >= CARD_LIMIT:
+                continue
+            seen.add(norm_front(c["front"]))
+            rows.append({**c, "user_id": self.user_id, "subject": key})
+        if rows:
+            db.table("cards").insert(rows).execute()
+        return len(rows)
+
+    def card_counts(self, key):
+        db, today = self._db(), baku_today()
+        total = db.table("cards").select("id", count="exact").eq("subject", key).limit(1).execute().count or 0
+        due = (db.table("cards").select("id", count="exact").eq("subject", key).lte("due", today)
+               .limit(1).execute().count or 0)
+        return {"total": total, "due": due}
+
+    def due_cards(self, key, limit=20):
+        return ((self._db().table("cards").select("*").eq("subject", key).lte("due", baku_today())
+                 .order("due").limit(limit).execute().data) or [])
+
+    def list_cards(self, key, limit=100):
+        return ((self._db().table("cards").select("*").eq("subject", key)
+                 .order("created_at", desc=True).limit(limit).execute().data) or [])
+
+    def review_card(self, key, card, grade):
+        new = schedule(card, grade)
+        self._db().table("cards").update(new).eq("id", card["id"]).execute()
+        return new
+
+    def delete_card(self, key, card_id):
+        if self._is_uuid(card_id):
+            self._db().table("cards").delete().eq("id", card_id).execute()
 
     # ---- hesabı silmək (bütün data cascade ilə silinir)
     def delete_account(self):
