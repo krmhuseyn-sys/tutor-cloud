@@ -409,6 +409,38 @@ div:has(> [role="listbox"]), div:has(> div > [role="listbox"]) {{
 }}
 @keyframes tk-spin {{ to {{ --tk-ang:360deg; }} }}
 
+/* ➕ əlavə düyməsi: sual xanasının yanında, temanın rəngində */
+.stApp [data-testid="stPopover"] button, .stApp button[data-testid="stPopoverButton"] {{
+  width:50px !important; min-width:50px !important; height:50px !important; padding:0 !important;
+  border-radius:50% !important; border:none !important;
+  background:linear-gradient(135deg, var(--tk-accent), var(--tk-accent2)) !important;
+  color:var(--tk-on) !important; font-size:22px !important; font-weight:700;
+  box-shadow:0 0 16px color-mix(in srgb, var(--tk-accent) 45%, transparent);
+  transition:transform .2s ease, box-shadow .2s ease;
+}}
+.stApp [data-testid="stPopover"] button *, .stApp button[data-testid="stPopoverButton"] * {{ color:var(--tk-on) !important; }}
+.stApp [data-testid="stPopover"] button svg {{ display:none; }}
+.stApp [data-testid="stPopover"] button:hover {{ transform:translateY(-2px) rotate(90deg); box-shadow:0 0 26px color-mix(in srgb, var(--tk-accent) 70%, transparent); }}
+[data-testid="stPopoverBody"] {{
+  background:var(--tk-surface) !important; color:var(--tk-text) !important;
+  border:1px solid var(--tk-border) !important; border-radius:16px !important; box-shadow:var(--tk-shadow);
+}}
+[data-testid="stPopoverBody"] * {{ color:var(--tk-text); }}
+[data-testid="stFileUploaderDropzone"] {{
+  background:var(--tk-surface2) !important; border:2px dashed var(--tk-line) !important; border-radius:14px !important;
+}}
+[data-testid="stFileUploaderDropzone"] * {{ color:var(--tk-text) !important; }}
+[data-testid="stFileUploaderDropzone"] button {{ background:var(--tk-accent) !important; color:var(--tk-on) !important; border:none !important; }}
+[data-testid="stFileUploaderDropzone"] button * {{ color:var(--tk-on) !important; }}
+[data-testid="stCameraInput"] {{ border-radius:14px; overflow:hidden; border:2px solid var(--tk-line); }}
+[data-testid="stCameraInput"] button {{ background:var(--tk-accent) !important; color:var(--tk-on) !important; border:none !important; }}
+[data-testid="stCameraInput"] button * {{ color:var(--tk-on) !important; }}
+@media (max-width: 640px) {{
+  [data-testid="stBottom"] [data-testid="stHorizontalBlock"] {{ flex-wrap:nowrap !important; gap:8px !important; }}
+  [data-testid="stBottom"] [data-testid="stColumn"] {{ min-width:0 !important; }}
+  [data-testid="stBottom"] [data-testid="stColumn"]:first-child {{ flex:0 0 52px !important; width:52px !important; }}
+}}
+
 {reduce_block}
 @media (max-width: 640px) {{
   .stApp::before, .stApp::after {{ opacity:.7; }}

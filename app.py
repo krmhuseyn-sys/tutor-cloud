@@ -1308,12 +1308,25 @@ for i, m in enumerate(chat["messages"]):
                 show_audio(d_, e_, True)
 
 _bottom = getattr(st, "bottom", None) or getattr(st, "_bottom", None)
-with (_bottom if _bottom is not None else st.container()):
+if _bottom is not None:
+    with _bottom:
+        att_ph = st.empty()
+        if st.session_state.att_list:
+            att_ph.caption(t("att_added") + ", ".join(a["name"] for a in st.session_state.att_list))
+        try:
+            c_att, c_in = st.columns([1, 14], vertical_alignment="bottom")
+        except TypeError:
+            c_att, c_in = st.columns([1, 14])
+        with c_att:
+            attach_menu()
+        with c_in:
+            q = st.chat_input(t("ask_ph"))
+else:  # köhnə Streamlit: ➕ sual xanasının üstündə
     attach_menu()
     att_ph = st.empty()
     if st.session_state.att_list:
         att_ph.caption(t("att_added") + ", ".join(a["name"] for a in st.session_state.att_list))
-q = st.chat_input(t("ask_ph"))
+    q = st.chat_input(t("ask_ph"))
 files = [_AttFile(a["name"], a["data"]) for a in st.session_state.att_list]
 
 if voice_in:
