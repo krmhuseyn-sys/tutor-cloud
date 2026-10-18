@@ -1573,6 +1573,14 @@ CT = {
         "c_topic_need": "Mövzunu yaz.", "c_from_ans_help": "Bu cavabdan kart yarat",
         "c_del": "Sil", "c_empty": "Hələ kart yoxdur.", "c_src": "Mənbə", "c_next": "Növbəti təkrar: ",
         "c_gen_fail": "Kartları oxuya bilmədim, bir də cəhd et.", "c_spin": "Kartlar hazırlanır...",
+        "view_stats": "📊 Panel", "d_title": "📊 Öyrənmə paneli",
+        "d_streak": "Seriya (gün)", "d_due": "Bu gün təkrar", "d_mastered": "Öyrənilmiş kart", "d_week": "Bu həftə təkrar",
+        "d_mastered_help": "Növbəti təkrarı 21 gündən çox olan kartlar",
+        "d_subjects": "Fənn üzrə irəliləyiş", "d_prog": "{m}/{t} öyrənilib · {d} bu gün təkrar · {c} söhbət",
+        "d_chart": "Son 14 gün", "d_reviews": "Təkrar", "d_questions": "Suallar",
+        "d_forecast": "Növbəti 7 gün: təkrar gələn kartlar", "d_today_short": "bu gün",
+        "d_weak": "Çətin kartlar", "d_weak_empty": "Hələ çətin kart yoxdur.", "d_lapses": "səhv",
+        "d_nodata": "Hələ data yoxdur: kart yarat və ya sual ver.",
     },
     "en": {
         "view": "Section", "view_chat": "💬 Chat", "view_cards": "🃏 Cards",
@@ -1587,6 +1595,14 @@ CT = {
         "c_topic_need": "Write the topic.", "c_from_ans_help": "Make cards from this answer",
         "c_del": "Delete", "c_empty": "No cards yet.", "c_src": "Source", "c_next": "Next review: ",
         "c_gen_fail": "I could not read the cards, try once more.", "c_spin": "Preparing cards...",
+        "view_stats": "📊 Stats", "d_title": "📊 Learning dashboard",
+        "d_streak": "Streak (days)", "d_due": "Due today", "d_mastered": "Mastered cards", "d_week": "Reviews this week",
+        "d_mastered_help": "Cards whose next review is more than 21 days away",
+        "d_subjects": "Progress by subject", "d_prog": "{m}/{t} mastered · {d} due today · {c} chats",
+        "d_chart": "Last 14 days", "d_reviews": "Reviews", "d_questions": "Questions",
+        "d_forecast": "Next 7 days: cards coming due", "d_today_short": "today",
+        "d_weak": "Hard cards", "d_weak_empty": "No hard cards yet.", "d_lapses": "misses",
+        "d_nodata": "No data yet: create cards or ask a question.",
     },
 }
 
@@ -1704,6 +1720,7 @@ def cb_rv_grade(S_, key, grade):
         return
     card = rv["queue"].pop(0)
     new = sc(S_.review_card, key, card, grade, default=None) or {}
+    sc(S_.bump_review, key)
     rv["done"] += 1
     if grade == 0:
         rv["queue"].append({**card, **new})  # "Yenidən": bu seansın sonunda təkrar gəlir
@@ -1784,6 +1801,64 @@ def list_cards_ui(S_, key):
             st.button(ct("c_del"), key=f"cd_{r['id']}", on_click=cb_card_del, args=(S_, key, r["id"]))
 
 
+def dashboard_page(S_):
+    st.title(ct("d_title"))
+    rows = sc(S_.card_stats, default=[]) or []
+    act = sc(S_.activity, 60, default={}) or {}
+    chats = sc(S_.chat_counts, default={}) or {}
+    today = store.baku_today()
+    if not rows and not act and not chats:
+        st.info(ct("d_nodata"))
+        return
+    due_all = sum(1 for r in rows if str(r.get("due") or "") <= today)
+    mastered = sum(1 for r in rows if int(r.get("interval_days") or 0) >= 21)
+    week = sum((act.get(store.add_days(today, -i)) or {}).get("reviews", 0) for i in range(7))
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("🔥 " + ct("d_streak"), store.streak(act, today))
+    c2.metric(ct("d_due"), due_all)
+    c3.metric(ct("d_mastered"), mastered, help=ct("d_mastered_help"))
+    c4.metric(ct("d_week"), week)
+
+    st.subheader(ct("d_subjects"))
+    for k_ in SUBJ_KEYS:
+        sub = [r for r in rows if r.get("subject") == k_]
+        n_chat = chats.get(k_, 0)
+        if not sub and not n_chat:
+            continue
+        m_ = sum(1 for r in sub if int(r.get("interval_days") or 0) >= 21)
+        d_ = sum(1 for r in sub if str(r.get("due") or "") <= today)
+        st.markdown(f"**{subj_name(k_)}**")
+        st.progress(m_ / len(sub) if sub else 0.0, text=ct("d_prog", m=m_, t=len(sub), d=d_, c=n_chat))
+
+    try:
+        import pandas as pd
+        days14 = [store.add_days(today, -i) for i in range(13, -1, -1)]
+        df = pd.DataFrame(
+            {ct("d_reviews"): [(act.get(d) or {}).get("reviews", 0) for d in days14],
+             ct("d_questions"): [(act.get(d) or {}).get("questions", 0) for d in days14]},
+            index=[d[5:] for d in days14])
+        st.subheader(ct("d_chart"))
+        st.bar_chart(df)
+        fc = []
+        for i in range(7):
+            day = store.add_days(today, i)
+            fc.append(sum(1 for r in rows if (str(r.get("due") or "") <= today if i == 0 else str(r.get("due")) == day)))
+        labels = [ct("d_today_short")] + [store.add_days(today, i)[5:] for i in range(1, 7)]
+        st.subheader(ct("d_forecast"))
+        st.bar_chart(pd.DataFrame({ct("d_due"): fc}, index=labels))
+    except Exception:
+        pass
+
+    st.subheader(ct("d_weak"))
+    weak = sorted([r for r in rows if int(r.get("lapses") or 0) > 0],
+                  key=lambda r: (-int(r.get("lapses") or 0), float(r.get("ease") or 2.5)))[:5]
+    if not weak:
+        st.caption(ct("d_weak_empty"))
+    for r in weak:
+        st.markdown(f"- **{(r.get('front') or '')[:110]}** · {subj_name(r['subject'])} · "
+                    f"{r.get('lapses')} {ct('d_lapses')}")
+
+
 def cards_page(S_, key):
     st.title("🃏 " + subj_name(key))
     flash = st.session_state.pop("cards_flash", None)
@@ -1831,7 +1906,7 @@ choice = st.sidebar.selectbox(
 web_on = st.sidebar.toggle(t("web"), value=False)
 
 key = st.sidebar.selectbox(t("subject"), SUBJ_KEYS, format_func=subj_name)
-view = st.sidebar.radio(ct("view"), ["chat", "cards"], key="view", horizontal=True,
+view = st.sidebar.radio(ct("view"), ["chat", "cards", "stats"], key="view", horizontal=True,
                         format_func=lambda v: ct("view_" + v))
 mode = st.sidebar.radio(t("mode"), ["learn", "practice", "exam"], format_func=lambda k: t("m_" + k))
 verify = st.sidebar.toggle(t("verify"), value=False)
@@ -1844,6 +1919,9 @@ list_box = st.sidebar.container()
 
 if view == "cards":
     cards_page(S, key)
+    st.stop()
+if view == "stats":
+    dashboard_page(S)
     st.stop()
 
 # ======================= TUTOR SƏHİFƏSİ =======================

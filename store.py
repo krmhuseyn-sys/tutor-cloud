@@ -124,6 +124,21 @@ def schedule(card, grade, today=None):
     return {"ease": round(ease, 2), "interval_days": interval, "reps": reps, "lapses": lapses, "due": due}
 
 
+def streak(activity, today=None):
+    """Ardıcıl aktiv gün sayı. activity: {gün: {"reviews": n, "questions": m}}.
+    Bu gün hələ aktivlik yoxdursa, seriya dünən başlayır (seriya bu gün itmir)."""
+    today = today or baku_today()
+    def active(day):
+        a = activity.get(day) or {}
+        return (a.get("reviews", 0) + a.get("questions", 0)) > 0
+    day = today if active(today) else add_days(today, -1)
+    n = 0
+    while active(day) and n < 400:
+        n += 1
+        day = add_days(day, -1)
+    return n
+
+
 # ---------------------------- yerli saxlama ----------------------------
 class LocalStore:
     kind = "local"
@@ -258,6 +273,52 @@ class LocalStore:
     def delete_card(self, key, card_id):
         rows = [r for r in self._cards_load(key) if r.get("id") != card_id]
         self._cards_save(key, rows)
+
+    # ---- panel (yerli)
+    def _log_path(self):
+        os.makedirs(os.path.join(self.base, "cards"), exist_ok=True)
+        return os.path.join(self.base, "cards", "_log.json")
+
+    def bump_review(self, subject):
+        try:
+            with open(self._log_path(), encoding="utf-8") as f:
+                log = json.load(f)
+        except Exception:
+            log = {}
+        day = log.setdefault(baku_today(), {})
+        day[subject] = day.get(subject, 0) + 1
+        with open(self._log_path(), "w", encoding="utf-8") as f:
+            json.dump(log, f)
+
+    def card_stats(self):
+        rows = []
+        folder = os.path.join(self.base, "cards")
+        if not os.path.isdir(folder):
+            return rows
+        for fn in os.listdir(folder):
+            if fn.endswith(".json") and not fn.startswith("_"):
+                for r in self._cards_load(fn[:-5]):
+                    rows.append({**{k: r.get(k) for k in ("interval_days", "reps", "lapses", "ease", "due", "front")},
+                                 "subject": fn[:-5]})
+        return rows
+
+    def activity(self, days=14):
+        try:
+            with open(self._log_path(), encoding="utf-8") as f:
+                log = json.load(f)
+        except Exception:
+            log = {}
+        return {d: {"reviews": sum(v.values()), "questions": 0} for d, v in log.items()}
+
+    def chat_counts(self):
+        out = {}
+        base = os.path.join(self.base, "chats")
+        if os.path.isdir(base):
+            for k in os.listdir(base):
+                p_ = os.path.join(base, k)
+                if os.path.isdir(p_):
+                    out[k] = len([f for f in os.listdir(p_) if f.endswith(".json")])
+        return out
 
 
 # ---------------------------- Supabase saxlama ----------------------------
@@ -410,6 +471,45 @@ class SupabaseStore:
     def delete_card(self, key, card_id):
         if self._is_uuid(card_id):
             self._db().table("cards").delete().eq("id", card_id).execute()
+
+
+    # ---- panel
+    def bump_review(self, subject):
+        try:
+            self._db().rpc("bump_review", {"p_subject": subject}).execute()
+        except SessionExpired:
+            raise
+        except Exception:
+            pass  # jurnal cədvəli hələ yaradılmayıb: təkrarı pozma
+
+    def card_stats(self):
+        return ((self._db().table("cards").select("subject,interval_days,reps,lapses,ease,due,front")
+                 .limit(3000).execute().data) or [])
+
+    def activity(self, days=14):
+        db = self._db()
+        since = add_days(baku_today(), -(days - 1))
+        out = {}
+        try:
+            for r in (db.table("review_log").select("day,count").gte("day", since).execute().data) or []:
+                d = out.setdefault(r["day"], {"reviews": 0, "questions": 0})
+                d["reviews"] += r["count"]
+        except SessionExpired:
+            raise
+        except Exception:
+            pass
+        for r in (db.table("usage").select("day,count").eq("provider", "question").gte("day", since)
+                  .execute().data) or []:
+            d = out.setdefault(r["day"], {"reviews": 0, "questions": 0})
+            d["questions"] += r["count"]
+        return out
+
+    def chat_counts(self):
+        rows = (self._db().table("chats").select("subject").limit(3000).execute().data) or []
+        out = {}
+        for r in rows:
+            out[r["subject"]] = out.get(r["subject"], 0) + 1
+        return out
 
     # ---- hesabı silmək (bütün data cascade ilə silinir)
     def delete_account(self):
