@@ -120,6 +120,11 @@ TXT = {
         "file_cut": "Fayl uzundur, yalnız əvvəlki hissəsi oxundu: ",
         "file_need_gemini": "Şəkil və skan edilmiş PDF üçün Gemini lazımdır, amma qoşulmayıb. Fayl nəzərə alınmadı.",
         "file_note": "Əlavə: ",
+        "forgot": "Parolu unutmusan?", "send_code": "Kod göndər", "back": "Geri",
+        "code_sent": "Əgər bu e-poçt qeydiyyatlıdırsa, ona 6 rəqəmli kod göndərildi. Spam qovluğuna da bax.",
+        "code_label": "E-poçtdakı kod", "new_pw": "Yeni parol", "reset_btn": "Parolu dəyiş",
+        "reset_ok": "Parol dəyişdi. İndi yeni parolla daxil ol.",
+        "reset_bad": "Kod səhvdir və ya vaxtı keçib. Yenidən kod göndər.",
         "try_ask": "Nədən başlayım? Birini seç:",
         "consent": "Məxfilik qaydası ilə tanış oldum və razıyam (söhbətlər Google/Groq-a göndərilir).",
         "consent_need": "Davam etmək üçün razılıq xanasını işarələ.",
@@ -198,6 +203,11 @@ TXT = {
         "file_cut": "The file is long; only the first part was read: ",
         "file_need_gemini": "Images and scanned PDFs need Gemini, which is not connected. The file was ignored.",
         "file_note": "Attached: ",
+        "forgot": "Forgot your password?", "send_code": "Send code", "back": "Back",
+        "code_sent": "If this email is registered, a 6-digit code was sent to it. Check spam too.",
+        "code_label": "Code from the email", "new_pw": "New password", "reset_btn": "Change password",
+        "reset_ok": "Password changed. Now log in with the new password.",
+        "reset_bad": "The code is wrong or expired. Send a new code.",
         "try_ask": "Where shall we start? Pick one:",
         "consent": "I have read the privacy note and agree (chats are sent to Google/Groq).",
         "consent_need": "Tick the consent box to continue.",
@@ -1048,6 +1058,82 @@ def do_signup(email, pw, pw2, code, agree=False):
         st.error(t("signup_fail"))
 
 
+def do_reset_send(email):
+    ss = st.session_state
+    email = (email or "").strip().lower()
+    if ss.get("rs_sends", 0) >= 3:
+        st.error(t("too_many"))
+        return
+    if not store.valid_email(email):
+        st.error(t("email_bad"))
+        return
+    ss["rs_sends"] = ss.get("rs_sends", 0) + 1
+    try:
+        store.make_client().auth.reset_password_for_email(email)
+    except Exception:
+        pass  # e-poçtun mövcudluğunu açıqlamırıq
+    ss["rs_email_val"] = email
+    ss["rs_step"] = 2
+    st.rerun()
+
+
+def do_reset_verify(code, p1, p2):
+    ss = st.session_state
+    if ss.get("rs_tries", 0) >= 5:
+        st.error(t("too_many"))
+        return
+    code = (code or "").strip()
+    if p1 != p2:
+        st.error(t("pw_mismatch"))
+        return
+    if store.password_problem(p1):
+        st.error(t("pw_weak"))
+        return
+    ss["rs_tries"] = ss.get("rs_tries", 0) + 1
+    if not re.fullmatch(r"\d{6,8}", code):
+        st.error(t("reset_bad"))
+        return
+    try:
+        sb = store.make_client()
+        res = sb.auth.verify_otp({"email": ss.get("rs_email_val", ""), "token": code, "type": "recovery"})
+        if not res or not res.session:
+            raise ValueError("no session")
+        sb.auth.update_user({"password": p1})
+        try:
+            sb.auth.sign_out()
+        except Exception:
+            pass
+    except Exception:
+        st.error(t("reset_bad"))
+        return
+    for k_ in ("rs_step", "rs_email_val", "rs_tries", "rs_sends"):
+        ss.pop(k_, None)
+    ss["rs_done"] = True
+    st.rerun()
+
+
+def reset_panel():
+    ss = st.session_state
+    if ss.pop("rs_done", False):
+        st.success(t("reset_ok"))
+    if ss.get("rs_step", 1) == 1:
+        with st.form("rs_form1"):
+            em = st.text_input(t("email"), key="rs_email")
+            go = st.form_submit_button(t("send_code"))
+        if go:
+            do_reset_send(em)
+    else:
+        st.caption(t("code_sent"))
+        with st.form("rs_form2"):
+            code = st.text_input(t("code_label"), key="rs_code", max_chars=8)
+            p1 = st.text_input(t("new_pw"), type="password", key="rs_p1")
+            p2 = st.text_input(t("password2"), type="password", key="rs_p2")
+            go2 = st.form_submit_button(t("reset_btn"))
+        if go2:
+            do_reset_verify(code, p1, p2)
+        st.button(t("back"), key="rs_back", on_click=lambda: st.session_state.update(rs_step=1))
+
+
 def login_screen():
     lang_picker()
     st.markdown(themes.hero("Tutor Komandam", t("welcome_sub")), unsafe_allow_html=True)
@@ -1060,6 +1146,8 @@ def login_screen():
             go = st.form_submit_button(t("login_btn"))
         if go:
             do_login(email, pw, rem)
+        with st.expander(t("forgot"), expanded=bool(st.session_state.get("rs_step") == 2 or st.session_state.get("rs_done"))):
+            reset_panel()
     with tab_up:
         with st.form("signup_form"):
             email2 = st.text_input(t("email"), key="su_email")
