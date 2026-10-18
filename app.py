@@ -120,6 +120,11 @@ TXT = {
         "file_cut": "Fayl uzundur, yalnız əvvəlki hissəsi oxundu: ",
         "file_need_gemini": "Şəkil və skan edilmiş PDF üçün Gemini lazımdır, amma qoşulmayıb. Fayl nəzərə alınmadı.",
         "file_note": "Əlavə: ",
+        "try_ask": "Nədən başlayım? Birini seç:",
+        "consent": "Məxfilik qaydası ilə tanış oldum və razıyam (söhbətlər Google/Groq-a göndərilir).",
+        "consent_need": "Davam etmək üçün razılıq xanasını işarələ.",
+        "export_title": "📦 Datamı yüklə", "export_hint": "Söhbətlərin, yaddaşın və profilin bir JSON faylında.",
+        "export_prep": "Hazırla", "export_dl": "⬇️ tutor_data.json yüklə", "export_empty": "Hazırlanır...",
         "att_file": "📁 Cihazdan fayl seç", "att_cam": "📷 Kamera ilə şəkil çək",
         "att_help": "Fayl və ya şəkil əlavə et", "att_added": "📎 Əlavə olunub: ",
         "lib_note": "Bu hesabda kitab materialları bağlıdır. Tutor profil və ümumi biliklə cavab verir.",
@@ -193,6 +198,11 @@ TXT = {
         "file_cut": "The file is long; only the first part was read: ",
         "file_need_gemini": "Images and scanned PDFs need Gemini, which is not connected. The file was ignored.",
         "file_note": "Attached: ",
+        "try_ask": "Where shall we start? Pick one:",
+        "consent": "I have read the privacy note and agree (chats are sent to Google/Groq).",
+        "consent_need": "Tick the consent box to continue.",
+        "export_title": "📦 Download my data", "export_hint": "Your chats, memory and profile in one JSON file.",
+        "export_prep": "Prepare", "export_dl": "⬇️ Download tutor_data.json", "export_empty": "Preparing...",
         "att_file": "📁 Choose a file from this device", "att_cam": "📷 Take a photo with the camera",
         "att_help": "Attach a file or photo", "att_added": "📎 Attached: ",
         "lib_note": "Course book materials are not available on this account. The tutor answers from its profile and general knowledge.",
@@ -229,6 +239,8 @@ RULES = (
     "- If you use the MATERIALS, cite [file, page]. Never invent citations.\n"
     "- Do not mention the student's major, field or future career (for example finance or fintech) "
     "unless the student brings it up. Use neutral everyday examples.\n"
+    "- Write math in LaTeX: inline as $...$ and display equations as $$...$$. Never use \\( \\) or \\[ \\].\n"
+    "- Write money with currency codes (for example 5 AZN or 10 USD), never with a dollar sign.\n"
     "- Keep replies focused and not too long."
 )
 
@@ -779,6 +791,49 @@ def read_attachments(files):
     return "\n\n".join(texts), media, names, warns
 
 
+def fix_math(text):
+    """Modelin \\( \\) və \\[ \\] yazdığı düsturları Streamlit-in başa düşdüyü $ formasına çevirir."""
+    text = re.sub(r"\\\[(.+?)\\\]", lambda m: "$$" + m.group(1) + "$$", text, flags=re.S)
+    text = re.sub(r"\\\((.+?)\\\)", lambda m: "$" + m.group(1) + "$", text, flags=re.S)
+    return text
+
+
+SUGG = {
+    "az": {
+        "gen": ["Bu həftə üçün öyrənmə planı qur", "Mühazirə qeydlərini necə daha yaxşı tuta bilərəm?",
+                "İmtahana effektiv necə hazırlaşım?", "Diqqətimi necə cəmləyim?"],
+        "rtp": ["Dəyişən nədir? Sadə nümunə ilə izah et", "if/else şərtini nümunə ilə göstər",
+                "for və while dövrünün fərqi nədir?", "Mənə kiçik bir praktika tapşırığı ver"],
+        "er": ["İmkan xərci (opportunity cost) nədir?", "Tələb və təklif qanununu izah et",
+               "Marjinal təhlil nədir? Nümunə ver", "Mənə 5 suallıq mini test ver"],
+        "kom": ["Rəsmi və qeyri-rəsmi üslubun fərqi nədir?", "Ərizə necə yazılır? Nümunə göstər",
+                "Diqqətlə dinləmə texnikaları hansılardır?", "Yazdığım mətni redaktə et"],
+        "rwct": ["How do I find the main idea of a text?", "Explain fact versus opinion",
+                 "Help me write a strong thesis statement", "Give me a short reading practice"],
+        "lsct": ["How can I take better notes while listening?", "Give me a speaking practice topic",
+                 "Teach me to give a 2-minute talk", "How do I argue a point critically?"],
+    },
+    "en": {
+        "gen": ["Build me a study plan for this week", "How can I take better lecture notes?",
+                "How do I prepare for exams effectively?", "How can I focus better?"],
+        "rtp": ["What is a variable? Explain with a simple example", "Show if/else with an example",
+                "What is the difference between for and while?", "Give me a small practice task"],
+        "er": ["What is opportunity cost?", "Explain the law of supply and demand",
+               "What is marginal analysis? Give an example", "Give me a 5-question mini quiz"],
+        "kom": ["What is the difference between formal and informal style?", "How do I write an application? Show an example",
+                "What are active listening techniques?", "Edit a text I wrote"],
+        "rwct": ["How do I find the main idea of a text?", "Explain fact versus opinion",
+                 "Help me write a strong thesis statement", "Give me a short reading practice"],
+        "lsct": ["How can I take better notes while listening?", "Give me a speaking practice topic",
+                 "Teach me to give a 2-minute talk", "How do I argue a point critically?"],
+    },
+}
+
+
+def cb_sugg(text):
+    st.session_state["pending_q"] = text
+
+
 # ======================= SÖHBƏT DÜYMƏLƏRİ =======================
 def cb_open(cid):
     st.session_state.cid = cid
@@ -895,7 +950,7 @@ def try_restore():
 
 
 def drop_login():
-    for k in ("sb", "user", "profile", "cid", "cur_key", "last_audio", "theme_sel", "theme_acc", "remember", "rt_written"):
+    for k in ("sb", "user", "profile", "cid", "cur_key", "last_audio", "theme_sel", "theme_acc", "remember", "rt_written", "export_blob"):
         st.session_state.pop(k, None)
     st.session_state["clear_cookie"] = True
 
@@ -951,10 +1006,13 @@ def do_login(email, pw, remember=True):
     st.rerun()
 
 
-def do_signup(email, pw, pw2, code):
+def do_signup(email, pw, pw2, code, agree=False):
     ss = st.session_state
     if ss.get("signup_tries", 0) >= 5:
         st.error(t("too_many"))
+        return
+    if not agree:
+        st.error(t("consent_need"))
         return
     ss["signup_tries"] = ss.get("signup_tries", 0) + 1
     email = (email or "").strip().lower()
@@ -1008,9 +1066,10 @@ def login_screen():
             pw_a = st.text_input(t("password"), type="password", key="su_pw")
             pw_b = st.text_input(t("password2"), type="password", key="su_pw2")
             code = st.text_input(t("invite"), key="su_code") if os.getenv("INVITE_CODE") else ""
+            agree = st.checkbox(t("consent"), key="su_agree")
             go2 = st.form_submit_button(t("signup_btn"))
         if go2:
-            do_signup(email2, pw_a, pw_b, code)
+            do_signup(email2, pw_a, pw_b, code, agree)
     st.caption(t("privacy"))
     if st.query_params.get("debug") == "1":  # diaqnostika: token dəyəri göstərilmir
         st.caption(f"debug: bərpa={st.session_state.get('restore_dbg')}")
@@ -1293,7 +1352,7 @@ if AUTH_ON and not IS_OWNER and key != "gen":
 
 for i, m in enumerate(chat["messages"]):
     with st.chat_message(m["role"]):
-        st.markdown(m["content"])
+        st.markdown(fix_math(m["content"]))
         if m.get("by"):
             st.caption(f"🤖 {m['by']}")
         if m.get("sources"):
@@ -1328,6 +1387,16 @@ else:  # köhnə Streamlit: ➕ sual xanasının üstündə
         att_ph.caption(t("att_added") + ", ".join(a["name"] for a in st.session_state.att_list))
     q = st.chat_input(t("ask_ph"))
 files = [_AttFile(a["name"], a["data"]) for a in st.session_state.att_list]
+
+if not q and st.session_state.get("pending_q"):
+    q = st.session_state.pop("pending_q")
+
+if not chat["messages"] and not q:
+    st.markdown("**" + t("try_ask") + "**")
+    sg_cols = st.columns(2)
+    for i_, txt_ in enumerate(SUGG[st.session_state.get("ui", "az")][key]):
+        with sg_cols[i_ % 2]:
+            wide(st.button, txt_, key=f"sg_{key}_{i_}", on_click=cb_sugg, args=(txt_,))
 
 if voice_in:
     with st.expander(t("mic"), expanded=True):
@@ -1487,6 +1556,28 @@ if AUTH_ON:
             except Exception as e:
                 st.error(friendly(e))
         theme_select()
+        st.markdown("**" + t("export_title") + "**")
+        st.caption(t("export_hint"))
+        if st.button(t("export_prep"), key="exp_btn"):
+            try:
+                dump = {"email": S.email, "profile": st.session_state.get("profile") or {}, "memory": {}, "chats": {}}
+                for k_ in SUBJ_KEYS:
+                    dump["memory"][k_] = S.load_mem(k_)
+                    items_ = []
+                    for c_ in (S.list_chats(k_) or []):
+                        full_ = S.load_chat(k_, c_["id"])
+                        if full_:
+                            items_.append(full_)
+                    dump["chats"][k_] = items_
+                st.session_state["export_blob"] = json.dumps(dump, ensure_ascii=False, indent=2, default=str)
+            except store.SessionExpired:
+                drop_login()
+                st.rerun()
+            except Exception as e:
+                st.error(friendly(e))
+        if st.session_state.get("export_blob"):
+            st.download_button(t("export_dl"), st.session_state["export_blob"], file_name="tutor_data.json",
+                               mime="application/json", key="exp_dl")
         st.caption(t("privacy"))
         st.button(t("logout"), on_click=do_logout, key="logout_btn")
         st.divider()
