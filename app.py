@@ -120,6 +120,8 @@ TXT = {
         "file_cut": "Fayl uzundur, yalnız əvvəlki hissəsi oxundu: ",
         "file_need_gemini": "Şəkil və skan edilmiş PDF üçün Gemini lazımdır, amma qoşulmayıb. Fayl nəzərə alınmadı.",
         "file_note": "Əlavə: ",
+        "att_file": "📁 Cihazdan fayl seç", "att_cam": "📷 Kamera ilə şəkil çək",
+        "att_help": "Fayl və ya şəkil əlavə et", "att_added": "📎 Əlavə olunub: ",
         "lib_note": "Bu hesabda kitab materialları bağlıdır. Tutor profil və ümumi biliklə cavab verir.",
         "privacy": ("Məxfilik: söhbətlərin hesabında saxlanır, digər istifadəçilər görmür. Layihə sahibi texniki olaraq "
                     "verilənlər bazasına çıxışa malikdir. Sorğular Google (Gemini) və ya Groq-a göndərilir; pulsuz "
@@ -191,6 +193,8 @@ TXT = {
         "file_cut": "The file is long; only the first part was read: ",
         "file_need_gemini": "Images and scanned PDFs need Gemini, which is not connected. The file was ignored.",
         "file_note": "Attached: ",
+        "att_file": "📁 Choose a file from this device", "att_cam": "📷 Take a photo with the camera",
+        "att_help": "Attach a file or photo", "att_added": "📎 Attached: ",
         "lib_note": "Course book materials are not available on this account. The tutor answers from its profile and general knowledge.",
         "privacy": ("Privacy: your chats are stored in your account and other users cannot see them. The project owner "
                     "technically has access to the database. Requests are sent to Google (Gemini) or Groq; on free tiers "
@@ -266,6 +270,8 @@ st.set_page_config(page_title="Tutor Komandam", page_icon="🎓", layout="wide")
 st.session_state.setdefault("ui", "az")
 st.session_state.setdefault("cid", None)
 st.session_state.setdefault("mic_n", 0)
+st.session_state.setdefault("att_n", 0)
+st.session_state.setdefault("att_list", [])
 st.session_state.setdefault("used", "gemini")
 st.session_state.setdefault("web_sources", [])
 
@@ -1174,6 +1180,65 @@ def transcribe(audio_bytes, key):
     return ""
 
 
+# ======================= ➕ ƏLAVƏ MENYUSU =======================
+class _AttFile:
+    def __init__(self, name, data):
+        self.name, self._d = name, data
+
+    def getvalue(self):
+        return self._d
+
+
+def _att_add(name, data):
+    ss = st.session_state
+    h = hashlib.md5(data).hexdigest()
+    if any(a["h"] == h for a in ss.att_list):
+        return False
+    if len(ss.att_list) >= MAX_FILES:
+        ss["att_full"] = True
+        return False
+    ss.att_list.append({"name": os.path.basename(name or "file")[:80], "data": data, "h": h})
+    return True
+
+
+def _att_rm(i):
+    lst = st.session_state.att_list
+    if 0 <= i < len(lst):
+        lst.pop(i)
+
+
+def attach_menu():
+    """➕ düyməsi: 1) cihazdan fayl seç, 2) kamera ilə şəkil çək. Seçilənlər siyahıda yığılır."""
+    ss = st.session_state
+    if ss.pop("att_sent", False):  # əvvəlki sorğu göndərilib: siyahını təmizlə
+        ss.att_list = []
+        ss.att_n += 1
+    ss["att_full"] = False
+    with st.popover("➕", help=t("att_help")):
+        mode_ = st.radio("att", ["file", "cam"], key="att_mode", horizontal=True,
+                         label_visibility="collapsed", format_func=lambda k: t("att_" + k))
+        added = False
+        if mode_ == "file":
+            ups = st.file_uploader(t("att_file"), type=FILE_TYPES, accept_multiple_files=True,
+                                   key=f"att_up_{ss.att_n}", label_visibility="collapsed")
+            for f in ups or []:
+                added = _att_add(f.name, f.getvalue()) or added
+        else:
+            shot = st.camera_input(t("att_cam"), key=f"att_cam_{ss.att_n}", label_visibility="collapsed")
+            if shot is not None:
+                data = shot.getvalue()
+                added = _att_add("kamera.png" if data[:4] == b"\x89PNG" else "kamera.jpg", data) or added
+        for i, a in enumerate(ss.att_list):
+            c1, c2 = st.columns([6, 1])
+            c1.caption("📎 " + a["name"])
+            c2.button("✕", key=f"att_rm_{i}", on_click=_att_rm, args=(i,))
+        if ss.get("att_full"):
+            st.caption(t("file_many"))
+        if added:
+            ss.att_n += 1  # yeni boş seçici: eyni fayl təkrar sayılmasın
+            st.rerun()
+
+
 # ======================= SAXLAMA VƏ GİRİŞ =======================
 if AUTH_ON:
     S = auth_gate()
@@ -1242,18 +1307,14 @@ for i, m in enumerate(chat["messages"]):
                 d_, e_ = speak(m["content"], key)
                 show_audio(d_, e_, True)
 
-files = []
-try:
-    q_in = st.chat_input(t("ask_ph"), accept_file="multiple", file_type=FILE_TYPES)
-except TypeError:  # köhnə Streamlit: fayl əlavəsi yoxdur
-    q_in = st.chat_input(t("ask_ph"))
-if isinstance(q_in, str) or q_in is None:
-    q = q_in
-else:
-    q = (q_in["text"] or "").strip() or None
-    files = list(q_in["files"] or [])
-    if files and not q:
-        q = t("file_default")
+_bottom = getattr(st, "bottom", None) or getattr(st, "_bottom", None)
+with (_bottom if _bottom is not None else st.container()):
+    attach_menu()
+    att_ph = st.empty()
+    if st.session_state.att_list:
+        att_ph.caption(t("att_added") + ", ".join(a["name"] for a in st.session_state.att_list))
+q = st.chat_input(t("ask_ph"))
+files = [_AttFile(a["name"], a["data"]) for a in st.session_state.att_list]
 
 if voice_in:
     with st.expander(t("mic"), expanded=True):
@@ -1280,6 +1341,9 @@ if q and AUTH_ON and USER_USAGE.get("question", 0) >= DAILY_QUESTIONS:
 
 if q:
     att_txt, media, att_names, att_warns = read_attachments(files)
+    if files:
+        st.session_state["att_sent"] = True  # növbəti işə düşəndə siyahı təmizlənəcək
+        att_ph.empty()
     for w_ in att_warns:
         st.warning(w_)
     ctx, srcs = retrieve(key, q, allow=IS_OWNER)
