@@ -68,7 +68,7 @@ TXT = {
         "chats": "🗂 Söhbətlər", "new_chat": "➕ Yeni söhbət", "no_chats": "Bu fənndə hələ söhbət yoxdur.",
         "delete": "Söhbəti sil",
         "ask_ph": "Sualını yaz...", "sources": "📚 Mənbələr", "web_sources": "🌐 Veb mənbələr",
-        "page_word": "səhifə",
+        "page_word": "səhifə", "show_page": "📄 Səhifəni göstər", "page_missing": "Bu səhifənin şəkli bu cihazda yoxdur, yalnız sitat göstərilir.",
         "save_mem": "💾 Yaddaşa yaz", "mem_ok": "Yaddaşa yazıldı", "my_mem": "🧠 Yaddaşım",
         "mic": "🎤 Danış", "mic_hint": "Danış, sonra dayandır",
         "transcribing": "Səsin yazıya çevrilir...", "mic_empty": "Səs başa düşülmədi, yenidən cəhd et.",
@@ -157,7 +157,7 @@ TXT = {
         "chats": "🗂 Chats", "new_chat": "➕ New chat", "no_chats": "No chats in this subject yet.",
         "delete": "Delete chat",
         "ask_ph": "Type your question...", "sources": "📚 Sources", "web_sources": "🌐 Web sources",
-        "page_word": "page",
+        "page_word": "page", "show_page": "📄 Show the page", "page_missing": "The page image is not available on this device; only the quote is shown.",
         "save_mem": "💾 Save to memory", "mem_ok": "Saved to memory", "my_mem": "🧠 My memory",
         "mic": "🎤 Speak", "mic_hint": "Speak, then stop",
         "transcribing": "Turning your voice into text...", "mic_empty": "I could not understand the audio. Try again.",
@@ -655,6 +655,57 @@ def used_label(used):
     return f"{PROVIDERS[pid]['label']} · {resolve_model(pid)}{extra}"
 
 
+# ======================= MƏNBƏLƏRİN GÖSTƏRİLMƏSİ =======================
+@st.cache_data(show_spinner=False, max_entries=40)
+def _render_page(path, page):
+    try:
+        import pymupdf as _pm
+        doc = _pm.open(path)
+        n = len(doc)
+        if page < 1 or page > n:
+            return None
+        return doc[page - 1].get_pixmap(dpi=110).tobytes("png")
+    except Exception:
+        return None
+
+
+def page_png(subj, src, page):
+    """materials/<fənn>/<fayl> varsa səhifənin şəklini qaytarır. Yol yalnız materials daxilində ola bilər."""
+    try:
+        if subj not in SUBJ_KEYS or subj == "gen":
+            return None
+        name = os.path.basename(str(src))
+        base = os.path.abspath(os.path.join("materials", subj))
+        path = os.path.abspath(os.path.join(base, name))
+        if os.path.dirname(path) != base or not name.lower().endswith(".pdf") or not os.path.isfile(path):
+            return None
+        return _render_page(path, int(page))
+    except Exception:
+        return None
+
+
+def show_sources(srcs, subj, uid):
+    """Mənbə kartları: eyni fayl+səhifənin sitatları bir başlıq altında, mətn sətir sarıyır,
+    mümkündürsə səhifənin şəkli açılır."""
+    groups = {}
+    for s_ in srcs or []:
+        groups.setdefault((s_.get("src"), s_.get("page")), []).append(s_.get("text", ""))
+    for j, ((src, page), texts) in enumerate(groups.items()):
+        st.caption(f"**{src}**, {t('page_word')} {page}")
+        seen_t = set()
+        for tx in texts:
+            tx = re.sub(r"[ \t]+", " ", tx or "").strip()
+            if tx and tx not in seen_t:
+                seen_t.add(tx)
+                st.code(tx, language=None, wrap_lines=True)
+        if IS_OWNER and st.toggle(t("show_page"), key=f"pgv_{uid}_{j}"):
+            img = page_png(subj, src, page)
+            if img:
+                st.image(img, caption=f"{src}, {t('page_word')} {page}")
+            else:
+                st.caption(t("page_missing"))
+
+
 # ======================= MATERIAL AXTARIŞI =======================
 @st.cache_data(show_spinner=False)
 def embed_cached(text):
@@ -676,7 +727,7 @@ def retrieve(key, q, n=8, allow=True):
         parts, srcs = [], []
         for d, m in zip(r["documents"][0], r["metadatas"][0]):
             parts.append(f"[{m['src']}, p.{m['page']}]\n{d}")
-            srcs.append({"src": m["src"], "page": m["page"], "text": d[:300]})
+            srcs.append({"src": m["src"], "page": m["page"], "text": d[:450]})
         return "\n\n".join(parts), srcs
     except Exception as e:
         st.toast("Material search failed, answering without materials." if is_busy(e)
@@ -1556,9 +1607,7 @@ for i, m in enumerate(chat["messages"]):
             st.caption(f"🤖 {m['by']}")
         if m.get("sources"):
             with st.expander(t("sources")):
-                for s in m["sources"]:
-                    st.caption(f"**{s['src']}**, {t('page_word')} {s['page']}")
-                    st.text(s["text"])
+                show_sources(m["sources"], key, f"{chat['id']}_{i}")
         show_web_sources(m.get("web"))
         if m["role"] == "assistant":
             if st.button("🔊", key=f"spk_{chat['id']}_{i}", help=t("read")):
@@ -1670,9 +1719,7 @@ if q:
             show_web_sources(web_urls)
             if srcs:
                 with st.expander(t("sources")):
-                    for s in srcs:
-                        st.caption(f"**{s['src']}**, {t('page_word')} {s['page']}")
-                        st.text(s["text"])
+                    show_sources(srcs, key, f"{chat['id']}_live")
             if speak_on:
                 d_, e_ = speak(answer, key)
                 show_audio(d_, e_, True)
