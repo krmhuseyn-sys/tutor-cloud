@@ -684,6 +684,16 @@ def page_png(subj, src, page):
         return None
 
 
+def _quote_html(text):
+    """Sitat bloku: HTML təhlükəsiz, sətir sarıyır, $ və markdown simvolları işləmir."""
+    import html as _html
+    t_ = _html.escape(text or "", quote=True).replace("$", "&#36;").replace("*", "&#42;").replace("_", "&#95;")
+    t_ = re.sub(r"\n\s*\n+", "\n", t_)
+    return ('<div style="white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;'
+            'background:rgba(127,127,127,.13);border-radius:10px;padding:10px 12px;margin:4px 0 8px;'
+            'font-size:.9rem;line-height:1.5;max-width:100%;">' + t_ + '</div>')
+
+
 def show_sources(srcs, subj, uid):
     """Mənbə kartları: eyni fayl+səhifənin sitatları bir başlıq altında, mətn sətir sarıyır,
     mümkündürsə səhifənin şəkli açılır."""
@@ -697,7 +707,7 @@ def show_sources(srcs, subj, uid):
             tx = re.sub(r"[ \t]+", " ", tx or "").strip()
             if tx and tx not in seen_t:
                 seen_t.add(tx)
-                st.code(tx, language=None, wrap_lines=True)
+                st.markdown(_quote_html(tx), unsafe_allow_html=True)
         if IS_OWNER and st.toggle(t("show_page"), key=f"pgv_{uid}_{j}"):
             img = page_png(subj, src, page)
             if img:
