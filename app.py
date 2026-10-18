@@ -1801,6 +1801,54 @@ def list_cards_ui(S_, key):
             st.button(ct("c_del"), key=f"cd_{r['id']}", on_click=cb_card_del, args=(S_, key, r["id"]))
 
 
+def _pal():
+    return themes.THEMES[themes.valid_theme(cur_theme())]
+
+
+def themed_bars(rows_):
+    """Tema rənglərində, fonsuz yığılmış sütun qrafiki. rows_: [{"day","series","value"}, ...]."""
+    p = _pal()
+    multi = len({r["series"] for r in rows_}) > 1
+    axis_x = {"title": None, "labelColor": p["muted"], "domainColor": p["border"], "tickColor": p["border"],
+              "labelAngle": -45, "labelFontSize": 11}
+    axis_y = {"title": None, "labelColor": p["muted"], "gridColor": p["border"], "domain": False,
+              "tickMinStep": 1, "labelFontSize": 11}
+    spec = {
+        "background": "transparent",
+        "height": 230,
+        "mark": {"type": "bar", "cornerRadiusTopLeft": 6, "cornerRadiusTopRight": 6},
+        "encoding": {
+            "x": {"field": "day", "type": "ordinal", "sort": None, "axis": axis_x},
+            "y": {"field": "value", "type": "quantitative", "axis": axis_y},
+            "color": {"field": "series", "type": "nominal",
+                      "scale": {"range": [p["accent"], p["accent2"]]},
+                      "legend": ({"orient": "bottom", "title": None, "labelColor": p["text"],
+                                  "symbolType": "square"} if multi else None)},
+            "tooltip": [{"field": "day"}, {"field": "series"}, {"field": "value"}],
+        },
+        "config": {"view": {"stroke": None}},
+    }
+    try:
+        import pandas as pd
+        data = pd.DataFrame(rows_)
+        wide(st.vega_lite_chart, data, spec)
+    except Exception:
+        pass
+
+
+def themed_progress(frac, caption):
+    """Tema rənginin qradiyentindən zolaq (Streamlit-in standart zolağı əvəzinə)."""
+    p = _pal()
+    pct = max(0, min(100, round(frac * 100)))
+    st.markdown(
+        f'<div style="height:10px;border-radius:99px;background:{p["surface2"]};'
+        f'border:1px solid {p["border"]};overflow:hidden;margin:2px 0 4px;">'
+        f'<div style="width:{pct}%;height:100%;border-radius:99px;'
+        f'background:linear-gradient(90deg,{p["accent"]},{p["accent2"]});"></div></div>',
+        unsafe_allow_html=True)
+    st.caption(caption)
+
+
 def dashboard_page(S_):
     st.title(ct("d_title"))
     rows = sc(S_.card_stats, default=[]) or []
@@ -1828,26 +1876,23 @@ def dashboard_page(S_):
         m_ = sum(1 for r in sub if int(r.get("interval_days") or 0) >= 21)
         d_ = sum(1 for r in sub if str(r.get("due") or "") <= today)
         st.markdown(f"**{subj_name(k_)}**")
-        st.progress(m_ / len(sub) if sub else 0.0, text=ct("d_prog", m=m_, t=len(sub), d=d_, c=n_chat))
+        themed_progress(m_ / len(sub) if sub else 0.0, ct("d_prog", m=m_, t=len(sub), d=d_, c=n_chat))
 
-    try:
-        import pandas as pd
-        days14 = [store.add_days(today, -i) for i in range(13, -1, -1)]
-        df = pd.DataFrame(
-            {ct("d_reviews"): [(act.get(d) or {}).get("reviews", 0) for d in days14],
-             ct("d_questions"): [(act.get(d) or {}).get("questions", 0) for d in days14]},
-            index=[d[5:] for d in days14])
-        st.subheader(ct("d_chart"))
-        st.bar_chart(df)
-        fc = []
-        for i in range(7):
-            day = store.add_days(today, i)
-            fc.append(sum(1 for r in rows if (str(r.get("due") or "") <= today if i == 0 else str(r.get("due")) == day)))
-        labels = [ct("d_today_short")] + [store.add_days(today, i)[5:] for i in range(1, 7)]
-        st.subheader(ct("d_forecast"))
-        st.bar_chart(pd.DataFrame({ct("d_due"): fc}, index=labels))
-    except Exception:
-        pass
+    days14 = [store.add_days(today, -i) for i in range(13, -1, -1)]
+    rows14 = []
+    for d in days14:
+        a_ = act.get(d) or {}
+        rows14.append({"day": d[5:], "series": ct("d_reviews"), "value": a_.get("reviews", 0)})
+        rows14.append({"day": d[5:], "series": ct("d_questions"), "value": a_.get("questions", 0)})
+    st.subheader(ct("d_chart"))
+    themed_bars(rows14)
+    fc_rows = []
+    for i in range(7):
+        day = store.add_days(today, i)
+        n_ = sum(1 for r in rows if (str(r.get("due") or "") <= today if i == 0 else str(r.get("due")) == day))
+        fc_rows.append({"day": ct("d_today_short") if i == 0 else day[5:], "series": ct("d_due"), "value": n_})
+    st.subheader(ct("d_forecast"))
+    themed_bars(fc_rows)
 
     st.subheader(ct("d_weak"))
     weak = sorted([r for r in rows if int(r.get("lapses") or 0) > 0],
