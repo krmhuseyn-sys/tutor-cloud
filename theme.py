@@ -409,18 +409,31 @@ div:has(> [role="listbox"]), div:has(> div > [role="listbox"]) {{
 }}
 @keyframes tk-spin {{ to {{ --tk-ang:360deg; }} }}
 
-/* ➕ əlavə düyməsi: sual xanasının yanında, temanın rəngində */
-.stApp [data-testid="stPopover"] button, .stApp button[data-testid="stPopoverButton"] {{
-  width:50px !important; min-width:50px !important; height:50px !important; padding:0 !important;
+/* + əlavə düyməsi: sual xanasının içində, ən solda, yumru, temanın rəngində */
+[data-testid="stBottom"] [data-testid="stHorizontalBlock"] {{ position:relative; flex-wrap:nowrap !important; }}
+[data-testid="stBottom"] [data-testid="stColumn"]:first-child, [data-testid="stBottom"] [data-testid="column"]:first-child {{
+  position:absolute !important; left:9px; bottom:7px; width:42px !important; min-width:42px !important;
+  flex:none !important; z-index:20;
+}}
+[data-testid="stBottom"] [data-testid="stColumn"]:nth-child(2), [data-testid="stBottom"] [data-testid="column"]:nth-child(2) {{
+  flex:1 1 100% !important; width:100% !important; min-width:0 !important;
+}}
+[data-testid="stBottom"] [data-testid="stChatInput"] textarea {{ padding-left:54px !important; }}
+[data-testid="stBottom"] [data-testid="stColumn"]:first-child button, [data-testid="stBottom"] [data-testid="column"]:first-child button {{
+  width:42px !important; min-width:42px !important; height:42px !important; min-height:42px !important; padding:0 !important;
   border-radius:50% !important; border:none !important;
   background:linear-gradient(135deg, var(--tk-accent), var(--tk-accent2)) !important;
-  color:var(--tk-on) !important; font-size:22px !important; font-weight:700;
-  box-shadow:0 0 16px color-mix(in srgb, var(--tk-accent) 45%, transparent);
-  transition:transform .2s ease, box-shadow .2s ease;
+  color:var(--tk-on) !important; font-size:26px !important; font-weight:600 !important; line-height:1 !important;
+  box-shadow:0 0 14px color-mix(in srgb, var(--tk-accent) 45%, transparent);
+  transition:transform .25s ease, box-shadow .2s ease;
 }}
-.stApp [data-testid="stPopover"] button *, .stApp button[data-testid="stPopoverButton"] * {{ color:var(--tk-on) !important; }}
-.stApp [data-testid="stPopover"] button svg {{ display:none; }}
-.stApp [data-testid="stPopover"] button:hover {{ transform:translateY(-2px) rotate(90deg); box-shadow:0 0 26px color-mix(in srgb, var(--tk-accent) 70%, transparent); }}
+[data-testid="stBottom"] [data-testid="stColumn"]:first-child button *, [data-testid="stBottom"] [data-testid="column"]:first-child button * {{
+  color:var(--tk-on) !important; font-size:26px !important; line-height:1 !important; margin:0 !important;
+}}
+[data-testid="stBottom"] [data-testid="stColumn"]:first-child button svg, [data-testid="stBottom"] [data-testid="column"]:first-child button svg {{ display:none !important; }}
+[data-testid="stBottom"] [data-testid="stColumn"]:first-child button:hover, [data-testid="stBottom"] [data-testid="column"]:first-child button:hover {{
+  transform:rotate(90deg) scale(1.06); box-shadow:0 0 24px color-mix(in srgb, var(--tk-accent) 70%, transparent);
+}}
 [data-testid="stPopoverBody"] {{
   background:var(--tk-surface) !important; color:var(--tk-text) !important;
   border:1px solid var(--tk-border) !important; border-radius:16px !important; box-shadow:var(--tk-shadow);
@@ -435,11 +448,6 @@ div:has(> [role="listbox"]), div:has(> div > [role="listbox"]) {{
 [data-testid="stCameraInput"] {{ border-radius:14px; overflow:hidden; border:2px solid var(--tk-line); }}
 [data-testid="stCameraInput"] button {{ background:var(--tk-accent) !important; color:var(--tk-on) !important; border:none !important; }}
 [data-testid="stCameraInput"] button * {{ color:var(--tk-on) !important; }}
-@media (max-width: 640px) {{
-  [data-testid="stBottom"] [data-testid="stHorizontalBlock"] {{ flex-wrap:nowrap !important; gap:8px !important; }}
-  [data-testid="stBottom"] [data-testid="stColumn"] {{ min-width:0 !important; }}
-  [data-testid="stBottom"] [data-testid="stColumn"]:first-child {{ flex:0 0 52px !important; width:52px !important; }}
-}}
 
 {reduce_block}
 @media (max-width: 640px) {{

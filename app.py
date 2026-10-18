@@ -1214,7 +1214,7 @@ def attach_menu():
         ss.att_list = []
         ss.att_n += 1
     ss["att_full"] = False
-    with st.popover("➕", help=t("att_help")):
+    with st.popover("+", help=t("att_help")):
         mode_ = st.radio("att", ["file", "cam"], key="att_mode", horizontal=True,
                          label_visibility="collapsed", format_func=lambda k: t("att_" + k))
         added = False
