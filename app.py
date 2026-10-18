@@ -1593,6 +1593,12 @@ CT = {
         "o_limit": "Gündəlik limit: {n} sual", "o_near": "⚠️ limitə yaxın", "o_avg": "Aktiv gündə orta sual",
         "o_need_sql": "Sahib paneli işləmir. Supabase-də owner_only.sql işlədilməyib və ya e-poçtun owners cədvəlinə əlavə olunmayıb.",
         "o_local": "Sahib paneli yalnız hesab sistemi (Supabase) ilə işləyir.",
+        "q_tab": "Test", "q_need": "Test üçün ən azı 4 fərqli cavablı kart lazımdır. Əvvəl kart yarat.",
+        "q_count": "Sual sayı", "q_start": "Testə başla", "q_pick": "Cavabı seç", "q_check": "Yoxla",
+        "q_next": "Növbəti", "q_finish": "Nəticəyə bax", "q_again": "Yeni test",
+        "q_progress": "Sual {i}/{n}", "q_score": "Nəticə: {s}/{n} düzgün",
+        "q_right": "Düzgün! ✅", "q_wrong": "Yanlış. Bu kart bu gün təkrara qayıdır.",
+        "q_missed_note": "Səhv etdiyin kartlar bu günün təkrarına qaytarıldı:",
     },
     "en": {
         "view": "Section", "view_chat": "💬 Chat", "view_cards": "🃏 Cards",
@@ -1627,6 +1633,12 @@ CT = {
         "o_limit": "Daily limit: {n} questions", "o_near": "⚠️ near the limit", "o_avg": "Avg questions per active day",
         "o_need_sql": "The owner dashboard is not working. owner_only.sql was not run in Supabase or your email is not in the owners table.",
         "o_local": "The owner dashboard works only with the account system (Supabase).",
+        "q_tab": "Quiz", "q_need": "A quiz needs at least 4 cards with different answers. Create some cards first.",
+        "q_count": "Number of questions", "q_start": "Start quiz", "q_pick": "Choose the answer", "q_check": "Check",
+        "q_next": "Next", "q_finish": "See result", "q_again": "New quiz",
+        "q_progress": "Question {i}/{n}", "q_score": "Result: {s}/{n} correct",
+        "q_right": "Correct! ✅", "q_wrong": "Wrong. This card returns to today's review.",
+        "q_missed_note": "Cards you missed were added back to today's review:",
     },
 }
 
@@ -1825,6 +1837,118 @@ def list_cards_ui(S_, key):
             st.button(ct("c_del"), key=f"cd_{r['id']}", on_click=cb_card_del, args=(S_, key, r["id"]))
 
 
+# ---- test rejimi: kartlardan çoxseçimli sual (əlavə AI sorğusu yoxdur)
+def build_quiz(cards, n, rng=None):
+    """cards-dan n sual qurur: düzgün cavab = kartın arxası, yanlışlar = digər kartların arxaları.
+    Qaytarır: [{card, opts: [mətn,...], ans: indeks}, ...]. Ən azı 4 fərqli cavab lazımdır."""
+    import random
+    rng = rng or random.Random()
+    pool = [c for c in cards if (c.get("front") or "").strip() and (c.get("back") or "").strip()]
+    backs = {}
+    for c in pool:
+        backs.setdefault(c["back"].strip().lower(), c["back"].strip())
+    if len(backs) < 4:
+        return []
+    picked = rng.sample(pool, min(n, len(pool)))
+    out = []
+    for c in picked:
+        right = c["back"].strip()
+        others = [v for k, v in backs.items() if k != right.lower()]
+        # düzgün cavabın uzunluğuna yaxın olanları üstün tut, ki cavab uzunluğundan tapılmasın
+        rng.shuffle(others)
+        others.sort(key=lambda v: abs(len(v) - len(right)) + rng.random() * 40)
+        opts = others[:3] + [right]
+        rng.shuffle(opts)
+        out.append({"card": c, "opts": opts, "ans": opts.index(right)})
+    return out
+
+
+def cb_qz_start(S_, key, n):
+    cards = sc(S_.list_cards, key, 300, default=[]) or []
+    items = build_quiz(cards, n)
+    st.session_state["qz"] = {"key": key, "items": items, "i": 0, "score": 0,
+                              "checked": None, "missed": [], "active": bool(items), "run": time.time()}
+
+
+def cb_qz_check(S_, key):
+    q = st.session_state["qz"]
+    it = q["items"][q["i"]]
+    pick = st.session_state.get(f"qz_opt_{q['run']}_{q['i']}")
+    if pick is None:
+        return
+    idx = it["opts"].index(pick)
+    q["checked"] = idx
+    if idx == it["ans"]:
+        q["score"] += 1
+    else:
+        q["missed"].append(it["card"])
+        # yanlış cavab: kart bu gün təkrara qayıdır
+        sc(S_.review_card, key, it["card"], 0, default=None)
+        sc(S_.bump_review, key)
+
+
+def cb_qz_next():
+    q = st.session_state["qz"]
+    q["i"] += 1
+    q["checked"] = None
+
+
+def cb_qz_stop():
+    st.session_state["qz"] = {"key": "", "items": [], "i": 0, "score": 0, "checked": None,
+                              "missed": [], "active": False}
+
+
+def quiz_ui(S_, key, cnt):
+    q = st.session_state.get("qz")
+    if not q or q.get("key") != key or not q.get("active"):
+        if cnt["total"] < 4:
+            st.info(ct("q_need"))
+            return
+        n = st.slider(ct("q_count"), 5, 20, 10, key="qz_n")
+        st.button(ct("q_start"), key="qz_go", type="primary", on_click=cb_qz_start, args=(S_, key, n))
+        if q and q.get("key") == key and q.get("items") == [] and q.get("run"):
+            st.info(ct("q_need"))
+        return
+    items, i = q["items"], q["i"]
+    if i >= len(items):
+        total = len(items)
+        st.success(ct("q_score", s=q["score"], n=total))
+        st.progress(q["score"] / max(total, 1))
+        if q["missed"]:
+            st.caption(ct("q_missed_note"))
+            for c in q["missed"]:
+                with st.expander((c["front"] or "")[:90]):
+                    st.markdown(fix_math(c["back"]))
+        st.button(ct("q_again"), key="qz_again", type="primary", on_click=cb_qz_stop)
+        return
+    it = items[i]
+    st.caption(ct("q_progress", i=i + 1, n=len(items)))
+    with st.container(border=True):
+        st.markdown(fix_math(it["card"]["front"]))
+    letters = "ABCD"
+    if q["checked"] is None:
+        st.radio(ct("q_pick"), it["opts"], index=None, key=f"qz_opt_{q['run']}_{i}",
+                 format_func=lambda o: f"{letters[it['opts'].index(o)]}) {o}", label_visibility="collapsed")
+        st.button(ct("q_check"), key=f"qz_chk_{i}", type="primary", on_click=cb_qz_check, args=(S_, key))
+        return
+    for j, o in enumerate(it["opts"]):
+        if j == it["ans"]:
+            st.success(f"{letters[j]}) {o}")
+        elif j == q["checked"]:
+            st.error(f"{letters[j]}) {o}")
+        else:
+            st.markdown(f"{letters[j]}) {o}")
+    if q["checked"] == it["ans"]:
+        st.caption(ct("q_right"))
+    else:
+        st.caption(ct("q_wrong"))
+    if it["card"].get("src"):
+        pg = f", {t('page_word')} {it['card']['page']}" if it["card"].get("page") else ""
+        st.caption(f"{ct('c_src')}: {it['card']['src']}{pg}")
+    last = i + 1 >= len(items)
+    st.button(ct("q_finish") if last else ct("q_next"), key=f"qz_nx_{i}", type="primary", on_click=cb_qz_next)
+
+
 def _pal():
     return themes.THEMES[themes.valid_theme(cur_theme())]
 
@@ -2020,9 +2144,11 @@ def cards_page(S_, key):
     c1, c2 = st.columns(2)
     c1.metric(ct("c_due"), cnt["due"])
     c2.metric(ct("c_total"), cnt["total"])
-    tab_r, tab_n, tab_l = st.tabs([ct("c_tab_rev"), ct("c_tab_new"), ct("c_tab_list")])
+    tab_r, tab_q, tab_n, tab_l = st.tabs([ct("c_tab_rev"), ct("q_tab"), ct("c_tab_new"), ct("c_tab_list")])
     with tab_r:
         review_ui(S_, key, cnt)
+    with tab_q:
+        quiz_ui(S_, key, cnt)
     with tab_n:
         new_cards_ui(S_, key)
     with tab_l:
