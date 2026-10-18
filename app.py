@@ -121,7 +121,13 @@ TXT = {
         "file_need_gemini": "Şəkil və skan edilmiş PDF üçün Gemini lazımdır, amma qoşulmayıb. Fayl nəzərə alınmadı.",
         "file_note": "Əlavə: ",
         "forgot": "Parolu unutmusan?", "send_code": "Kod göndər", "back": "Geri",
-        "code_sent": "Əgər bu e-poçt qeydiyyatlıdırsa, ona 6 rəqəmli kod göndərildi. Spam qovluğuna da bax.",
+        "code_sent": "Əgər bu e-poçt qeydiyyatlıdırsa, ona təsdiq kodu göndərildi. Spam qovluğuna da bax.",
+        "verify_btn": "Təsdiqlə",
+        "login_code_sent": "Parol düzdür. E-poçtuna təsdiq kodu göndərildi, onu yaz. Spam qovluğuna da bax.",
+        "signup_code_sent": "Qeydiyyatı tamamlamaq üçün e-poçtuna göndərilən kodu yaz. Spam qovluğuna da bax.",
+        "signup_pending": "Qeydiyyat gözləyir: kodu Qeydiyyat sekmasında yaz.",
+        "code_bad": "Kod səhvdir və ya vaxtı keçib.",
+        "code_send_fail": "Kod göndərilə bilmədi. Bir az sonra yenidən yoxla.",
         "code_label": "E-poçtdakı kod", "new_pw": "Yeni parol", "reset_btn": "Parolu dəyiş",
         "reset_ok": "Parol dəyişdi. İndi yeni parolla daxil ol.",
         "reset_bad": "Kod səhvdir və ya vaxtı keçib. Yenidən kod göndər.",
@@ -204,7 +210,13 @@ TXT = {
         "file_need_gemini": "Images and scanned PDFs need Gemini, which is not connected. The file was ignored.",
         "file_note": "Attached: ",
         "forgot": "Forgot your password?", "send_code": "Send code", "back": "Back",
-        "code_sent": "If this email is registered, a 6-digit code was sent to it. Check spam too.",
+        "code_sent": "If this email is registered, a verification code was sent to it. Check spam too.",
+        "verify_btn": "Verify",
+        "login_code_sent": "Password is correct. A verification code was sent to your email, enter it. Check spam too.",
+        "signup_code_sent": "Enter the code sent to your email to finish signing up. Check spam too.",
+        "signup_pending": "Sign-up is pending: enter the code in the Sign up tab.",
+        "code_bad": "The code is wrong or expired.",
+        "code_send_fail": "Could not send the code. Try again in a moment.",
         "code_label": "Code from the email", "new_pw": "New password", "reset_btn": "Change password",
         "reset_ok": "Password changed. Now log in with the new password.",
         "reset_bad": "The code is wrong or expired. Send a new code.",
@@ -1011,8 +1023,83 @@ def do_login(email, pw, remember=True):
         ss["login_fails"] = ss.get("login_fails", 0) + 1
         st.error(t("login_fail"))  # səbəbi açıqlamırıq (e-poçtun mövcudluğu bilinməsin)
         return
+    if os.getenv("LOGIN_2FA", "1") == "0":
+        set_login(sb, res.user)
+        ss["remember"] = bool(remember)
+        st.rerun()
+    # İkinci addım: parol düzdür, e-poçta kod göndəririk. Parol sessiyası atılır,
+    # giriş yalnız kod təsdiqlənəndən sonra olur.
+    try:
+        store.make_client().auth.sign_in_with_otp({"email": email, "options": {"should_create_user": False}})
+    except Exception:
+        st.error(t("code_send_fail"))
+        return
+    ss["lg_step"] = 2
+    ss["lg_email"] = email
+    ss["lg_rem"] = bool(remember)
+    ss["lg_tries"] = 0
+    st.rerun()
+
+
+_LG_KEYS = ("lg_step", "lg_email", "lg_rem", "lg_tries")
+_SU_KEYS = ("su_step", "su_email_val", "su_tries")
+
+
+def cancel_steps(keys):
+    for k_ in keys:
+        st.session_state.pop(k_, None)
+
+
+def _check_code(code):
+    return bool(re.fullmatch(r"\d{6,8}", (code or "").strip()))
+
+
+def do_login_verify(code):
+    ss = st.session_state
+    if ss.get("lg_tries", 0) >= 5:
+        cancel_steps(_LG_KEYS)
+        st.error(t("too_many"))
+        return
+    ss["lg_tries"] = ss.get("lg_tries", 0) + 1
+    if not _check_code(code):
+        st.error(t("code_bad"))
+        return
+    try:
+        sb = store.make_client()
+        res = sb.auth.verify_otp({"email": ss.get("lg_email", ""), "token": code.strip(), "type": "email"})
+        if not res or not res.session or not res.user:
+            raise ValueError("no session")
+    except Exception:
+        st.error(t("code_bad"))
+        return
+    rem = ss.get("lg_rem", True)
+    cancel_steps(_LG_KEYS)
     set_login(sb, res.user)
-    st.session_state["remember"] = bool(remember)
+    ss["remember"] = bool(rem)
+    st.rerun()
+
+
+def do_signup_verify(code):
+    ss = st.session_state
+    if ss.get("su_tries", 0) >= 5:
+        cancel_steps(_SU_KEYS)
+        st.error(t("too_many"))
+        return
+    ss["su_tries"] = ss.get("su_tries", 0) + 1
+    if not _check_code(code):
+        st.error(t("code_bad"))
+        return
+    try:
+        sb = store.make_client()
+        res = sb.auth.verify_otp({"email": ss.get("su_email_val", ""), "token": code.strip(), "type": "signup"})
+        if not res or not res.session or not res.user:
+            raise ValueError("no session")
+    except Exception:
+        st.error(t("code_bad"))
+        return
+    cancel_steps(_SU_KEYS)
+    set_login(sb, res.user)
+    ss["remember"] = True
     st.rerun()
 
 
@@ -1053,7 +1140,10 @@ def do_signup(email, pw, pw2, code, agree=False):
         st.session_state["remember"] = True
         st.rerun()
     elif res is not None and res.user is not None:
-        st.success(t("signup_confirm"))
+        ss["su_step"] = 2
+        ss["su_email_val"] = email
+        ss["su_tries"] = 0
+        st.rerun()
     else:
         st.error(t("signup_fail"))
 
@@ -1138,26 +1228,47 @@ def login_screen():
     lang_picker()
     st.markdown(themes.hero("Tutor Komandam", t("welcome_sub")), unsafe_allow_html=True)
     tab_in, tab_up = st.tabs([t("login"), t("signup")])
+    ss = st.session_state
     with tab_in:
-        with st.form("login_form"):
-            email = st.text_input(t("email"), key="li_email")
-            pw = st.text_input(t("password"), type="password", key="li_pw")
-            rem = st.checkbox(t("remember"), value=True, key="li_rem")
-            go = st.form_submit_button(t("login_btn"))
-        if go:
-            do_login(email, pw, rem)
-        with st.expander(t("forgot"), expanded=bool(st.session_state.get("rs_step") == 2 or st.session_state.get("rs_done"))):
-            reset_panel()
+        if ss.get("su_step") == 2:
+            st.info(t("signup_pending"))
+        if ss.get("lg_step") == 2:
+            st.caption(t("login_code_sent"))
+            with st.form("login_code_form"):
+                lcode = st.text_input(t("code_label"), key="lg_code", max_chars=8)
+                go_c = st.form_submit_button(t("verify_btn"))
+            if go_c:
+                do_login_verify(lcode)
+            st.button(t("back"), key="lg_back", on_click=cancel_steps, args=(_LG_KEYS,))
+        else:
+            with st.form("login_form"):
+                email = st.text_input(t("email"), key="li_email")
+                pw = st.text_input(t("password"), type="password", key="li_pw")
+                rem = st.checkbox(t("remember"), value=True, key="li_rem")
+                go = st.form_submit_button(t("login_btn"))
+            if go:
+                do_login(email, pw, rem)
+            with st.expander(t("forgot"), expanded=bool(ss.get("rs_step") == 2 or ss.get("rs_done"))):
+                reset_panel()
     with tab_up:
-        with st.form("signup_form"):
-            email2 = st.text_input(t("email"), key="su_email")
-            pw_a = st.text_input(t("password"), type="password", key="su_pw")
-            pw_b = st.text_input(t("password2"), type="password", key="su_pw2")
-            code = st.text_input(t("invite"), key="su_code") if os.getenv("INVITE_CODE") else ""
-            agree = st.checkbox(t("consent"), key="su_agree")
-            go2 = st.form_submit_button(t("signup_btn"))
-        if go2:
-            do_signup(email2, pw_a, pw_b, code, agree)
+        if ss.get("su_step") == 2:
+            st.caption(t("signup_code_sent"))
+            with st.form("signup_code_form"):
+                scode = st.text_input(t("code_label"), key="su_vcode", max_chars=8)
+                go_s = st.form_submit_button(t("verify_btn"))
+            if go_s:
+                do_signup_verify(scode)
+            st.button(t("back"), key="su_back", on_click=cancel_steps, args=(_SU_KEYS,))
+        else:
+            with st.form("signup_form"):
+                email2 = st.text_input(t("email"), key="su_email")
+                pw_a = st.text_input(t("password"), type="password", key="su_pw")
+                pw_b = st.text_input(t("password2"), type="password", key="su_pw2")
+                code = st.text_input(t("invite"), key="su_code") if os.getenv("INVITE_CODE") else ""
+                agree = st.checkbox(t("consent"), key="su_agree")
+                go2 = st.form_submit_button(t("signup_btn"))
+            if go2:
+                do_signup(email2, pw_a, pw_b, code, agree)
     st.caption(t("privacy"))
     if st.query_params.get("debug") == "1":  # diaqnostika: token dəyəri göstərilmir
         st.caption(f"debug: bərpa={st.session_state.get('restore_dbg')}")
