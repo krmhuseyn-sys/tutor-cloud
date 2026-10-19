@@ -9,31 +9,31 @@ DEFAULT_THEME = "teal"
 # dark: tema tünddürsə True. Seçicilər və qaranlıq/işıqlı sistem rejimindən asılı olmayaraq rənglər tam təyin olunur.
 THEMES = {
     "teal": dict(
-        az="Akademik", en="Academic", dark=False,
+        az="Akademik", en="Academic", ru="Академическая", dark=False,
         bg="#F6F3EA", bg2="#E6F0EC", surface="#FFFFFF", surface2="#F0EEE6",
         text="#16302B", muted="#566B66", accent="#0F766E", on_accent="#FFFFFF", accent2="#C9892B",
         border="rgba(22,48,43,0.16)", head="'Fraunces', Georgia, serif",
     ),
     "forest": dict(
-        az="Meşə", en="Forest", dark=True,
+        az="Meşə", en="Forest", ru="Лес", dark=True,
         bg="#0C1A17", bg2="#10261F", surface="#14231F", surface2="#1A2E29",
         text="#E4EFEB", muted="#9DB5AE", accent="#34D3A0", on_accent="#05261C", accent2="#E9B44C",
         border="rgba(228,239,235,0.16)", head="'Fraunces', Georgia, serif",
     ),
     "midnight": dict(
-        az="Gecə", en="Midnight", dark=True,
+        az="Gecə", en="Midnight", ru="Полночь", dark=True,
         bg="#0A0F1F", bg2="#14173A", surface="#121A33", surface2="#192244",
         text="#E7EBF8", muted="#9AA6C9", accent="#7C93FF", on_accent="#0A1030", accent2="#22D3EE",
         border="rgba(231,235,248,0.16)", head="'Space Grotesk', 'Inter', sans-serif",
     ),
     "paper": dict(
-        az="Kağız", en="Paper", dark=False,
+        az="Kağız", en="Paper", ru="Бумага", dark=False,
         bg="#FFFFFF", bg2="#F3F4F8", surface="#F6F6F8", surface2="#ECEDF2",
         text="#1B1C20", muted="#60636E", accent="#2F5BEA", on_accent="#FFFFFF", accent2="#E8590C",
         border="rgba(27,28,32,0.14)", head="'Inter', sans-serif",
     ),
     "sunset": dict(
-        az="Gün batımı", en="Sunset", dark=False,
+        az="Gün batımı", en="Sunset", ru="Закат", dark=False,
         bg="#FFF4EA", bg2="#FCE5F0", surface="#FFFFFF", surface2="#FFEDE0",
         text="#3A1F2B", muted="#7D5A68", accent="#D6336C", on_accent="#FFFFFF", accent2="#F08C00",
         border="rgba(58,31,43,0.16)", head="'Poppins', 'Inter', sans-serif",

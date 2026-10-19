@@ -240,6 +240,14 @@ TXT = {
     },
 }
 
+try:
+    import lang_ru
+except ImportError:  # fayl yoxdursa rus dili sadəcə görünmür
+    lang_ru = None
+if lang_ru:
+    TXT["ru"] = {**TXT["en"], **lang_ru.TXT}
+    SUBJ["ru"] = lang_ru.SUBJ
+
 MODES = {
     "learn": "",
     "practice": (
@@ -454,7 +462,7 @@ def is_busy(e):
 def friendly(e):
     s = str(e)
     if s.startswith("MULTI:"):
-        head = "Could not get an answer. " if st.session_state.get("ui") == "en" else "Cavab alınmadı. "
+        head = {"en": "Could not get an answer. ", "ru": "Не удалось получить ответ. "}.get(st.session_state.get("ui"), "Cavab alınmadı. ")
         return head + s[6:]
     if s == "EMPTY":
         return t("empty")
@@ -1034,6 +1042,9 @@ SUGG = {
     },
 }
 
+if lang_ru:
+    SUGG["ru"] = {**SUGG["en"], **{k: v for k, v in lang_ru.SUGG.items()}}
+
 
 def cb_sugg(text):
     st.session_state["pending_q"] = text
@@ -1180,9 +1191,19 @@ def sc(method, *args, default=None):
         return default
 
 
+def cb_ui(v):
+    st.session_state["ui"] = v
+    st.session_state["ui_keep"] = v
+
+
 def lang_picker():
-    st.radio("🌐", ["az", "en"], key="ui", horizontal=True,
-             format_func=lambda x: {"az": "Azərbaycanca", "en": "English"}[x])
+    """Dil düymələri (giriş səhifəsində və Ayarlarda): seçilən dolu tema rəngində."""
+    langs = [("az", "Azərbaycanca"), ("en", "English")] + ([("ru", "Русский")] if "ru" in TXT else [])
+    cols = st.columns(len(langs))
+    for c_, (code_, name_) in zip(cols, langs):
+        with c_:
+            wide(st.button, name_, key=f"lang_{code_}",
+                 type="primary" if st.session_state.get("ui") == code_ else "secondary", on_click=cb_ui, args=(code_,))
 
 
 def set_login(sb, user):
@@ -1757,7 +1778,7 @@ CT = {
         "mm_cards": "🃏 Terminlərdən kart yarat",
         "sb_settings": "⚙️ Ayarlar", "view_settings": "⚙️ Ayarlar",
         "set_g_answer": "Cavab seçimləri", "set_g_voice": "Səs", "set_g_look": "Görünüş",
-        "set_g_owner": "Sahib üçün: provayderlər",
+        "set_g_owner": "Sahib üçün: provayderlər", "set_g_lang": "İnterfeys dili",
         "d_c_m": "{m}/{t} öyrənilib", "d_c_d": "{d} bu gün təkrar", "d_c_c": "{c} söhbət",
         "g_label": "🎯 Gündəlik hədəf", "g_off": "Söndürülü", "g_n": "{n} təkrar",
         "g_prog": "Bu gün: {n}/{g} təkrar", "g_done": "🎯 Gündəlik hədəf tamamlandı. Əla!",
@@ -1837,12 +1858,14 @@ CT = {
         "mm_cards": "🃏 Create cards from terms",
         "sb_settings": "⚙️ Settings", "view_settings": "⚙️ Settings",
         "set_g_answer": "Answer options", "set_g_voice": "Voice", "set_g_look": "Appearance",
-        "set_g_owner": "Owner: providers",
+        "set_g_owner": "Owner: providers", "set_g_lang": "Interface language",
         "d_c_m": "{m}/{t} mastered", "d_c_d": "{d} due today", "d_c_c": "{c} chats",
         "g_label": "🎯 Daily goal", "g_off": "Off", "g_n": "{n} reviews",
         "g_prog": "Today: {n}/{g} reviews", "g_done": "🎯 Daily goal reached. Great job!",
     },
 }
+if lang_ru:
+    CT["ru"] = {**CT["en"], **lang_ru.CT}
 
 
 def ct(k, **kw):
@@ -3179,6 +3202,9 @@ def settings_page(key, opts, choice):
     dash_css()
     st.title(ct("view_settings"))
     with st.container(border=True):
+        sec(ct("set_g_lang"))
+        lang_picker()
+    with st.container(border=True):
         sec(ct("set_g_answer"))
         st.selectbox(t("provider"), opts, index=opts.index(choice), key="w_choice", on_change=cb_choice,
                      format_func=lambda k: t("p_smart") if k == "smart" else provider_label(k))
@@ -3226,20 +3252,9 @@ if AUTH_ON:
         f'<small>{_e(t("quota"))}: {_used}/{_lim}</small>'
         f'<div class="tk-bar{_warn}"><i style="width:{min(100, round(_used / _lim * 100))}%"></i></div></div></div>',
         unsafe_allow_html=True)
-def cb_ui(v):
-    st.session_state["ui"] = v
-    st.session_state["ui_keep"] = v
-
-
 def cb_mode(v):
     st.session_state["mode_sel"] = v
 
-
-_lang_cols = st.sidebar.columns(2)
-for _c, (_code, _name) in zip(_lang_cols, [("az", "Azərbaycanca"), ("en", "English")]):
-    with _c:
-        wide(st.button, _name, key=f"lang_{_code}",
-             type="primary" if st.session_state.get("ui") == _code else "secondary", on_click=cb_ui, args=(_code,))
 
 # bölmələr: 2 sütunlu düymə şəbəkəsi, aktiv olan tema rəngində dolu
 _views = ["chat", "cards", "plan", "stats", "settings"] + (["owner"] if (AUTH_ON and IS_OWNER) else [])
