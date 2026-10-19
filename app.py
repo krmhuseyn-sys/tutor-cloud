@@ -1851,6 +1851,8 @@ CT = {
         "ff_h_notoserif": "İri və aydın serif; kiçik ekranda da oxunur.",
         "ff_h_system": "Cihazın öz şrifti: ən sürətli, heç nə yüklənmir.",
         "ff_sample": "Əhməd ışıqlı şəhərdə çörək yedi: ə ı ş ğ ö ü ç. 0123456789",
+        "st_on": "açıq", "st_off": "söndürülü", "sv_web": "Veb axtarış", "sv_verify": "Dəqiqlik rejimi",
+        "sv_read": "Səslə oxuma", "sv_mic": "Mikrofon", "set_quick": "Sürətli ayarlar",
         "view_memory": "🧠 Yaddaşım", "set_g_avatar": "Profil şəkli",
         "av_hint": "Öz şəklini yüklə və ya hazır avatar seç. Söhbətdə mesajlarının yanında görünəcək.",
         "av_upload": "Şəkil yüklə (JPG, PNG, WEBP; 5 MB-a qədər)", "av_emoji": "Və ya hazır avatar seç",
@@ -1964,6 +1966,8 @@ CT = {
         "ff_h_notoserif": "Large clear serif; readable on small screens.",
         "ff_h_system": "Your device's own font: fastest, nothing to download.",
         "ff_sample": "The quick brown fox jumps over the lazy dog. 0123456789",
+        "st_on": "on", "st_off": "off", "sv_web": "Web search", "sv_verify": "Accuracy mode",
+        "sv_read": "Read aloud", "sv_mic": "Microphone", "set_quick": "Quick settings",
         "view_memory": "🧠 My memory", "set_g_avatar": "Profile picture",
         "av_hint": "Upload your own photo or pick a ready avatar. It appears next to your messages in the chat.",
         "av_upload": "Upload a photo (JPG, PNG, WEBP; up to 5 MB)", "av_emoji": "Or pick an avatar",
@@ -3286,7 +3290,6 @@ def account_ui():
         st.download_button(t("export_dl"), st.session_state["export_blob"], file_name="tutor_data.json",
                            mime="application/json", key="exp_dl")
     st.caption(t("privacy"))
-    st.button(t("logout"), on_click=do_logout, key="logout_btn")
     st.divider()
     st.caption(t("delete_acc"))
     confirm = st.text_input(t("delete_confirm"), key="del_confirm")
@@ -3660,8 +3663,7 @@ def avatar_ui(letter):
 
 def font_ui():
     cur = st.session_state.get("ff_sel", "default")
-    names = {"default": ct("ff_default"), "system": ct("ff_system"), "ptsans": "PT Sans", "opensans": "Open Sans",
-             "plex": "IBM Plex Sans", "lora": "Lora", "notoserif": "Noto Serif"}
+    names = FONT_NAMES()
     for r in range(0, len(FONT_ORDER), 2):
         cols = st.columns(2)
         for c_, f_ in zip(cols, FONT_ORDER[r:r + 2]):
@@ -3728,6 +3730,127 @@ def settings_cat_ui(cat, key, opts, choice):
             health_ui()
 
 
+# ---- Ayarlar ana səhifəsi: qruplaşmış sətirlər (xətti ikon, cari dəyər, ox/açar) ----
+_IC = {
+    "palette": '<circle cx="13.5" cy="6.5" r=".6"/><circle cx="17.5" cy="10.5" r=".6"/><circle cx="8.5" cy="7.5" r=".6"/>'
+               '<circle cx="6.5" cy="12.5" r=".6"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.93 0 1.65-.75 1.65-1.69 0-.44-.18-.84-.44-1.12-.29-.29-.44-.65-.44-1.13a1.64 1.64 0 0 1 1.67-1.67h2c3.05 0 5.55-2.5 5.55-5.55C21.97 6.01 17.46 2 12 2z"/>',
+    "user": '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
+    "chat": '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
+    "volume": '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/>',
+    "tool": '<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94z"/>',
+    "globe": '<circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>',
+    "shield": '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/>',
+    "logout": '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>',
+    "chev": '<polyline points="9 18 15 12 9 6"/>',
+}
+SET_CSS = """<style>
+[class*="st-key-sgroup_"]{background:var(--tk-surface);border:1px solid var(--tk-border);border-radius:20px;overflow:hidden;gap:0 !important;box-shadow:var(--tk-shadow);margin-bottom:6px}
+[class*="st-key-srow_"]{position:relative;gap:0 !important}
+[class*="st-key-sgo_"]{position:absolute !important;inset:0;z-index:3;margin:0 !important;width:100% !important;height:100% !important}
+[class*="st-key-sgo_"] button{width:100% !important;height:100% !important;min-height:0 !important;opacity:0;padding:0 !important;cursor:pointer;border-radius:0 !important}
+[class*="st-key-srow_"]:hover .tk-srow{background:color-mix(in srgb,var(--tk-accent) 9%,transparent)}
+.tk-srow{display:flex;align-items:center;gap:16px;padding:16px 20px;min-height:68px;border-top:1px solid var(--tk-border);color:var(--tk-text);transition:background .15s}
+.tk-srow.first{border-top:0}
+.tk-srow .ic{width:24px;height:24px;flex:none;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.tk-srow .chev{width:18px;height:18px;flex:none;fill:none;stroke:var(--tk-muted);stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.tk-srow .tx{flex:1;min-width:0}
+.tk-srow .tx b{display:block;font-weight:600;font-size:1.02rem;line-height:1.25}
+.tk-srow .tx small{display:block;margin-top:2px;color:var(--tk-muted);font-size:.84rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tk-srow .tk-bar{height:6px;margin-top:8px;max-width:260px}
+.tk-srow.danger,.tk-srow.danger .ic{color:#E5484D}
+.tk-srow.danger .tx b{color:#E5484D}
+.tk-tg{width:48px;height:28px;border-radius:99px;flex:none;position:relative;background:var(--tk-surface2);border:1px solid var(--tk-border);transition:background .2s}
+.tk-tg i{position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:var(--tk-muted);transition:left .2s,background .2s}
+.tk-tg.on{background:var(--tk-accent);border-color:transparent}
+.tk-tg.on i{left:23px;background:var(--tk-on)}
+@media (max-width:640px){.tk-srow{padding:16px 16px;min-height:72px;gap:14px}}
+</style>"""
+LANG_NAMES = {"az": "Azərbaycanca", "en": "English", "ru": "Русский"}
+
+
+def _svg(name, cls="ic"):
+    return f'<svg class="{cls}" viewBox="0 0 24 24" aria-hidden="true">{_IC[name]}</svg>'
+
+
+def _noemoji(s_):
+    """Mətnin əvvəlindəki emoji və ayırıcıları atır (sətirdə ikon artıq var)."""
+    return re.sub(r"^[^\w]+", "", str(s_)).strip()
+
+
+def kcont(key):
+    try:
+        return st.container(key=key)
+    except TypeError:  # köhnə Streamlit: açarlı konteyner yoxdur
+        return st.container()
+
+
+def srow(rid, icon, title, sub="", on_click=None, args=(), toggle=None, danger=False, first=False, lead=None, extra=""):
+    """Bir ayar sətri: HTML görünüş + üstündə görünməz düymə (basanda on_click işləyir)."""
+    with kcont(f"srow_{rid}"):
+        if toggle is not None:
+            right = f'<span class="tk-tg{" on" if toggle else ""}"><i></i></span>'
+        elif danger:
+            right = ""
+        else:
+            right = _svg("chev", "chev")
+        sub_html = f"<small>{sub}</small>" if sub else ""  # sub əvvəlcədən təhlükəsiz yığılır
+        lead_html = lead if lead is not None else _svg(icon)
+        st.markdown(
+            f'<div class="tk-srow{" first" if first else ""}{" danger" if danger else ""}">{lead_html}'
+            f'<div class="tx"><b>{_e(title)}</b>{sub_html}{extra}</div>{right}</div>', unsafe_allow_html=True)
+        st.button(title, key=f"sgo_{rid}", on_click=on_click, args=args)
+
+
+def settings_home(opts, choice):
+    st.markdown(SET_CSS, unsafe_allow_html=True)
+    ui_ = st.session_state.get("ui", "az")
+    on_off = lambda b: ct("st_on") if b else ct("st_off")
+    web_on_ = bool(st.session_state.get("tg_web"))
+    ver_on_ = bool(st.session_state.get("tg_verify"))
+    spk_on_ = bool(st.session_state.get("tg_speak"))
+    mic_on_ = bool(st.session_state.get("tg_voice"))
+    st.title(_noemoji(ct("view_settings")))
+    # profil kartı
+    letter = _uletter()
+    extra = ""
+    if AUTH_ON:
+        lim = max(DAILY_QUESTIONS, 1)
+        used = int(USER_USAGE.get("question", 0) or 0)
+        warn = " warn" if used >= 0.8 * lim else ""
+        card_title, card_sub = "@" + letter, _e(f'{t("quota")}: {used}/{lim}')
+        extra = f'<div class="tk-bar{warn}"><i style="width:{min(100, round(used / lim * 100))}%"></i></div>'
+    else:
+        card_title, card_sub = _noemoji(ct("sc_profile")), _e(ct("sc_profile_h"))
+    with kcont("sgroup_p"):
+        srow("profile", "user", card_title, card_sub, on_click=cb_setcat, args=("profile",), first=True,
+             lead=avatar_html(S, letter, 48), extra=extra)
+    # kateqoriyalar
+    prov = t("p_smart") if choice == "smart" else provider_label(choice)
+    items = [
+        ("ui", "palette", f"{LANG_NAMES.get(ui_, ui_)} · {FONT_NAMES()[st.session_state.get('ff_sel', 'default')]} · {themes.label(cur_theme(), ui_)}"),
+        ("answers", "chat", f"{prov} · {ct('sv_web')} {on_off(web_on_)} · {ct('sv_verify')} {on_off(ver_on_)}"),
+        ("voice", "volume", f"{ct('sv_read')} {on_off(spk_on_)} · {ct('sv_mic')} {on_off(mic_on_)}"),
+    ] + ([("owner", "tool", ct("sc_owner_h"))] if IS_OWNER else [])
+    with kcont("sgroup_c"):
+        for n_, (k_, ic_, sub_) in enumerate(items):
+            srow(k_, ic_, _noemoji(ct("sc_" + k_)), _e(sub_), on_click=cb_setcat, args=(k_,), first=(n_ == 0))
+    # sürətli açarlar
+    st.markdown(f'<div class="sb-label" style="margin:14px 4px 8px">{_e(ct("set_quick"))}</div>', unsafe_allow_html=True)
+    with kcont("sgroup_q"):
+        srow("q_web", "globe", ct("sv_web"), "", on_click=_flip, args=("tg_web",), toggle=web_on_, first=True)
+        srow("q_ver", "shield", ct("sv_verify"), "", on_click=_flip, args=("tg_verify",), toggle=ver_on_)
+        srow("q_spk", "volume", ct("sv_read"), "", on_click=_flip, args=("tg_speak",), toggle=spk_on_)
+    if AUTH_ON:
+        st.markdown('<div style="height:8px"></div>', unsafe_allow_html=True)
+        with kcont("sgroup_x"):
+            srow("logout", "logout", t("logout"), "", on_click=do_logout, danger=True, first=True)
+
+
+def FONT_NAMES():
+    return {"default": ct("ff_default"), "system": ct("ff_system"), "ptsans": "PT Sans", "opensans": "Open Sans",
+            "plex": "IBM Plex Sans", "lora": "Lora", "notoserif": "Noto Serif"}
+
+
 def settings_page(key, opts, choice):
     dash_css()
     cats = ["ui", "profile", "answers", "voice"] + (["owner"] if IS_OWNER else [])
@@ -3736,18 +3859,10 @@ def settings_page(key, opts, choice):
         cat = None
         st.session_state["set_cat"] = None
     if cat is None:
-        st.title(ct("view_settings"))
-        st.caption(ct("set_what"))
-        for r in range(0, len(cats), 2):
-            cols = st.columns(2)
-            for c_, k_ in zip(cols, cats[r:r + 2]):
-                with c_:
-                    with st.container(border=True):
-                        wide(st.button, ct("sc_" + k_), key=f"cat_{k_}", on_click=cb_setcat, args=(k_,))
-                        st.caption(ct("sc_" + k_ + "_h"))
+        settings_home(opts, choice)
         return
     wide(st.button, ct("set_back"), key="set_back_btn", on_click=cb_setcat, args=(None,))
-    st.title(ct("sc_" + cat))
+    st.title(_noemoji(ct("sc_" + cat)))
     st.caption(ct("sc_" + cat + "_h"))
     settings_cat_ui(cat, key, opts, choice)
 
