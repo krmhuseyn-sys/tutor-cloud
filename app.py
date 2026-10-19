@@ -2815,7 +2815,8 @@ def map_dot(tree):
         lines.append(cur)
         return "\\n".join(lines)
 
-    out = ["digraph G {", "rankdir=LR;", 'bgcolor="transparent";', "nodesep=0.22;", "ranksep=0.55;",
+    out = ["digraph G {", "rankdir=LR;", 'bgcolor="transparent";', "nodesep=0.18;", "ranksep=0.45;",
+           'pad="0.15";',
            f'edge [color="{p["accent"]}", arrowhead=none, penwidth=1.4];']
     counter = [0]
 
@@ -3015,10 +3016,14 @@ def map_ui(S_, key):
         st.markdown("\n".join(f"- {fix_math(s_)}" for s_ in res["summary"]))
     if res["map"]["children"]:
         sec(ct("mm_map"))
+        dot_ = map_dot(res["map"])
         try:
-            wide(st.graphviz_chart, map_dot(res["map"]))
+            try:
+                st.graphviz_chart(dot_, width="content")  # təbii ölçü: nəhəng şəkil və kəsilmə olmur
+            except TypeError:
+                st.graphviz_chart(dot_, use_container_width=False)
         except Exception:
-            st.code(map_dot(res["map"]), language="dot")
+            st.code(dot_, language="dot")
     if res["terms"]:
         sec(ct("mm_terms"))
         for t_ in res["terms"]:
