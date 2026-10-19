@@ -67,6 +67,39 @@ def make_client():
     return create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_ANON_KEY"))
 
 
+def invite_required():
+    """Sahib Supabase-də dəvət kodu təyin edibsə True (qeydiyyat zamanı çağırılır, giriş tələb etmir)."""
+    try:
+        res = make_client().rpc("invite_required", {}).execute()
+        return bool(res.data)
+    except Exception:
+        return False
+
+
+def check_invite(code):
+    """Supabase-dəki dəvət kodunu yoxlayır. Server 10 dəqiqədə həddindən çox cəhdi rədd edir."""
+    try:
+        res = make_client().rpc("check_invite", {"p_code": (code or "").strip()[:100]}).execute()
+        return bool(res.data)
+    except Exception:
+        return False
+
+
+NOTE_CHUNK, NOTE_MAX_CHUNKS, NOTE_MAX_FILES = 800, 800, 12
+
+
+def note_chunks_from_text(text, size=NOTE_CHUNK, overlap=100):
+    """Mətni üst-üstə düşən parçalara bölür (şəxsi qeydlər üçün)."""
+    text = re.sub(r"[ \t]+", " ", (text or "").replace("\r", "")).strip()
+    out, i = [], 0
+    while i < len(text):
+        piece = text[i:i + size].strip()
+        if len(piece) > 30:
+            out.append(piece)
+        i += size - overlap
+    return out
+
+
 def owner_emails():
     return {e.strip().lower() for e in os.getenv("OWNER_EMAILS", "").split(",") if e.strip()}
 
@@ -157,6 +190,18 @@ def streak(activity, today=None):
         n += 1
         day = add_days(day, -1)
     return n
+
+
+def longest_streak(activity):
+    """Bütün tarixçədə ən uzun ardıcıl aktiv gün sayı."""
+    days = sorted(d for d, a in activity.items() if (a.get("reviews", 0) + a.get("questions", 0)) > 0)
+    best = run = 0
+    prev = None
+    for d in days:
+        run = run + 1 if prev is not None and add_days(prev, 1) == d else 1
+        best = max(best, run)
+        prev = d
+    return best
 
 
 # ---------------------------- yerli saxlama ----------------------------
@@ -429,6 +474,52 @@ class LocalStore:
 
     def owner_overview(self, days=7):
         return None
+
+    # ---- şəxsi qeydlər (yerli: notes/<fənn>.json)
+    def _notes_path(self, key):
+        os.makedirs(os.path.join(self.base, "notes"), exist_ok=True)
+        return os.path.join(self.base, "notes", f"{key}.json")
+
+    def _notes_load(self, key):
+        try:
+            with open(self._notes_path(key), encoding="utf-8") as f:
+                rows = json.load(f)
+            return rows if isinstance(rows, list) else []
+        except Exception:
+            return []
+
+    def add_notes(self, key, name, chunks):
+        """Eyni adlı faylı əvəz edir. Qaytarır: yazılan parça sayı (limit aşılırsa -1)."""
+        name = str(name)[:120]
+        rows = [r for r in self._notes_load(key) if r.get("name") != name]
+        if len({r.get("name") for r in rows}) >= NOTE_MAX_FILES:
+            return -1
+        room = NOTE_MAX_CHUNKS - len(rows)
+        if room <= 0:
+            return -1
+        chunks = list(chunks)[:room]
+        rows += [{"name": name, "idx": i, "text": c} for i, c in enumerate(chunks)]
+        with open(self._notes_path(key), "w", encoding="utf-8") as f:
+            json.dump(rows, f, ensure_ascii=False)
+        return len(chunks)
+
+    def list_note_files(self, key):
+        out = {}
+        for r in self._notes_load(key):
+            out[r["name"]] = out.get(r["name"], 0) + 1
+        return [{"name": k, "chunks": v} for k, v in out.items()]
+
+    def note_chunks(self, key):
+        return self._notes_load(key)
+
+    def delete_note_file(self, key, name):
+        rows = [r for r in self._notes_load(key) if r.get("name") != name]
+        with open(self._notes_path(key), "w", encoding="utf-8") as f:
+            json.dump(rows, f, ensure_ascii=False)
+
+    # ---- bloklama / dəvət kodu: yalnız Supabase rejimində mənalıdır
+    def is_blocked(self):
+        return False
 
     def chat_counts(self):
         out = {}
@@ -714,6 +805,65 @@ class SupabaseStore:
         """Yalnız sahib üçün (Supabase funksiyası özü yoxlayır). days: 1, 7, 28; 0 = bütün zaman."""
         res = self._db().rpc("owner_overview", {"p_days": int(days)}).execute()
         return res.data
+
+    # ---- şəxsi qeydlər (notes cədvəli; yalnız sahibinə görünür; extras.sql lazımdır)
+    def add_notes(self, key, name, chunks):
+        db = self._db()
+        name = str(name)[:120]
+        old = (db.table("notes").select("name,idx").eq("subject", key).limit(2000).execute().data) or []
+        others = [r for r in old if r.get("name") != name]
+        if len({r["name"] for r in others}) >= NOTE_MAX_FILES:
+            return -1
+        room = NOTE_MAX_CHUNKS - len(others)
+        if room <= 0:
+            return -1
+        chunks = list(chunks)[:room]
+        db.table("notes").delete().eq("subject", key).eq("name", name).execute()
+        rows = [{"user_id": self.user_id, "subject": key, "name": name, "idx": i, "text": c}
+                for i, c in enumerate(chunks)]
+        for i in range(0, len(rows), 100):
+            db.table("notes").insert(rows[i:i + 100]).execute()
+        return len(chunks)
+
+    def list_note_files(self, key):
+        rows = (self._db().table("notes").select("name").eq("subject", key).limit(2000).execute().data) or []
+        out = {}
+        for r in rows:
+            out[r["name"]] = out.get(r["name"], 0) + 1
+        return [{"name": k, "chunks": v} for k, v in out.items()]
+
+    def note_chunks(self, key):
+        return ((self._db().table("notes").select("name,idx,text").eq("subject", key)
+                 .order("name").order("idx").limit(NOTE_MAX_CHUNKS).execute().data) or [])
+
+    def delete_note_file(self, key, name):
+        self._db().table("notes").delete().eq("subject", key).eq("name", str(name)).execute()
+
+    # ---- bloklama (blocked_users cədvəli: istifadəçi yalnız öz sətrini oxuya bilər, yaza bilməz)
+    def is_blocked(self):
+        try:
+            rows = (self._db().table("blocked_users").select("user_id").eq("user_id", self.user_id)
+                    .limit(1).execute().data) or []
+            return bool(rows)
+        except SessionExpired:
+            raise
+        except Exception:
+            return False  # cədvəl hələ yaradılmayıb
+
+    # ---- sahib: dəvət kodu və bloklama (Supabase funksiyaları sahibliyi özü yoxlayır)
+    def owner_invite_status(self):
+        return bool(self._db().rpc("owner_invite_status", {}).execute().data)
+
+    def owner_set_invite(self, code):
+        """Boş mətn kodu silir (qeydiyyat sərbəst olur / env-dəki kod qüvvədədir)."""
+        self._db().rpc("owner_set_invite", {"p_code": (code or "").strip()[:100]}).execute()
+
+    def owner_set_blocked(self, username, flag):
+        return self._db().rpc("owner_set_blocked", {"p_username": (username or "").strip().lower()[:20],
+                                                    "p_blocked": bool(flag)}).execute().data
+
+    def owner_blocked_list(self):
+        return self._db().rpc("owner_blocked_list", {}).execute().data or []
 
     def chat_counts(self):
         rows = (self._db().table("chats").select("subject").limit(3000).execute().data) or []
