@@ -347,7 +347,7 @@ def cur_theme():
     """Hansı tema göstərilsin: hesabdakı seçim, yoxsa qeydiyyatdakı önizləmə, yoxsa standart."""
     ss = st.session_state
     prof = ss.get("profile") or {}
-    pick = ss.get("theme_acc") or prof.get("theme") or ss.get("theme_sel")
+    pick = ss.get("theme_acc") or ss.get("theme_keep") or prof.get("theme") or ss.get("theme_sel")
     return themes.valid_theme(pick)
 
 
@@ -1104,6 +1104,7 @@ def cb_new():
 
 def cb_theme():
     val = themes.valid_theme(st.session_state.get("theme_acc"))
+    st.session_state["theme_keep"] = val  # seçici göstərilməyəndə (başqa bölmədə) də qalsın
     if AUTH_ON:
         try:
             S.set_theme(val)
@@ -1835,6 +1836,21 @@ CT = {
         "d_c_m": "{m}/{t} öyrənilib", "d_c_d": "{d} bu gün təkrar", "d_c_c": "{c} söhbət",
         "g_label": "🎯 Gündəlik hədəf", "g_off": "Söndürülü", "g_n": "{n} təkrar",
         "g_prog": "Bu gün: {n}/{g} təkrar", "g_done": "🎯 Gündəlik hədəf tamamlandı. Əla!",
+        "set_g_font": "Şrift", "set_what": "Nəyi dəyişmək istəyirsən?", "set_back": "← Ayarlara qayıt",
+        "sc_ui": "🎨 İnterfeys", "sc_ui_h": "Dil · Şrift · Tema · Oxu rejimi",
+        "sc_profile": "👤 Profil", "sc_profile_h": "Şəkil · Haqqında · Datamı yüklə · Hesab",
+        "sc_answers": "💬 Cavablar", "sc_answers_h": "Model seçimi · Veb axtarış · Yoxlama",
+        "sc_voice": "🔊 Səs", "sc_voice_h": "Cavabı səslə oxu · Mikrofon · Test",
+        "sc_owner": "🛠 Sahib", "sc_owner_h": "Provayderlər · Sağlamlıq yoxlaması",
+        "ff_default": "Standart (tema)", "ff_system": "Sistem şrifti",
+        "ff_h_default": "Hər temanın öz başlıq və mətn şrifti.",
+        "ff_h_ptsans": "Sadə və aydın, uzun mətn üçün rahatdır.",
+        "ff_h_opensans": "Dostcanlı və geniş, ekranda yaxşı oxunur.",
+        "ff_h_plex": "Ciddi, texniki görünüş; düstur və rəqəmlər üçün yaxşıdır.",
+        "ff_h_lora": "Kitab kimi serif; uzun oxu üçün.",
+        "ff_h_notoserif": "İri və aydın serif; kiçik ekranda da oxunur.",
+        "ff_h_system": "Cihazın öz şrifti: ən sürətli, heç nə yüklənmir.",
+        "ff_sample": "Əhməd ışıqlı şəhərdə çörək yedi: ə ı ş ğ ö ü ç. 0123456789",
         "view_memory": "🧠 Yaddaşım", "set_g_avatar": "Profil şəkli",
         "av_hint": "Öz şəklini yüklə və ya hazır avatar seç. Söhbətdə mesajlarının yanında görünəcək.",
         "av_upload": "Şəkil yüklə (JPG, PNG, WEBP; 5 MB-a qədər)", "av_emoji": "Və ya hazır avatar seç",
@@ -1933,6 +1949,21 @@ CT = {
         "d_c_m": "{m}/{t} mastered", "d_c_d": "{d} due today", "d_c_c": "{c} chats",
         "g_label": "🎯 Daily goal", "g_off": "Off", "g_n": "{n} reviews",
         "g_prog": "Today: {n}/{g} reviews", "g_done": "🎯 Daily goal reached. Great job!",
+        "set_g_font": "Font", "set_what": "What would you like to change?", "set_back": "← Back to settings",
+        "sc_ui": "🎨 Interface", "sc_ui_h": "Language · Font · Theme · Reading mode",
+        "sc_profile": "👤 Profile", "sc_profile_h": "Picture · About · Export data · Account",
+        "sc_answers": "💬 Answers", "sc_answers_h": "Model · Web search · Verification",
+        "sc_voice": "🔊 Voice", "sc_voice_h": "Read answers aloud · Microphone · Test",
+        "sc_owner": "🛠 Owner", "sc_owner_h": "Providers · Health check",
+        "ff_default": "Default (theme)", "ff_system": "System font",
+        "ff_h_default": "Each theme's own heading and body fonts.",
+        "ff_h_ptsans": "Simple and clear, easy for long text.",
+        "ff_h_opensans": "Friendly and open, reads well on screens.",
+        "ff_h_plex": "Serious technical look; good for formulas and numbers.",
+        "ff_h_lora": "Book-like serif for long reading.",
+        "ff_h_notoserif": "Large clear serif; readable on small screens.",
+        "ff_h_system": "Your device's own font: fastest, nothing to download.",
+        "ff_sample": "The quick brown fox jumps over the lazy dog. 0123456789",
         "view_memory": "🧠 My memory", "set_g_avatar": "Profile picture",
         "av_hint": "Upload your own photo or pick a ready avatar. It appears next to your messages in the chat.",
         "av_upload": "Upload a photo (JPG, PNG, WEBP; up to 5 MB)", "av_emoji": "Or pick an avatar",
@@ -3381,11 +3412,32 @@ def health_ui():
 
 
 FS_PX = {"s": 14, "m": 16, "l": 18, "xl": 20}
+# şrift ailəsi: id -> (Google Fonts sorğusu və ya None, CSS şrift siyahısı). "default" temanın öz şriftidir.
+# Seçilmişlər Azərbaycan (ə ı ş ğ ö ü ç) və kiril hərflərini dəstəkləyir; çatmayan simvol növbəti şriftə keçir.
+FONT_OPT = {
+    "default": (None, None),
+    "ptsans": ("PT+Sans:wght@400;700", "'PT Sans', 'Inter', system-ui, sans-serif"),
+    "opensans": ("Open+Sans:wght@400;600;700", "'Open Sans', 'Inter', system-ui, sans-serif"),
+    "plex": ("IBM+Plex+Sans:wght@400;500;600;700", "'IBM Plex Sans', 'Inter', system-ui, sans-serif"),
+    "lora": ("Lora:wght@400;500;600;700", "'Lora', Georgia, 'Times New Roman', serif"),
+    "notoserif": ("Noto+Serif:wght@400;600;700", "'Noto Serif', Georgia, 'Times New Roman', serif"),
+    "system": (None, "system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif"),
+}
+FONT_ORDER = list(FONT_OPT)
+_FONT_SEL = ", ".join(f"html body .stApp {x}".strip() for x in [
+    "", "p", "li", "label", "summary", "h1", "h2", "h3", "h4", "button", "input", "textarea",
+    '[data-testid="stMarkdownContainer"]', '[data-testid="stCaptionContainer"]', ".tk-sec", ".tk-grow", ".tk-chip"])
 
 
 def read_css():
     fs = st.session_state.get("fs_sel", "m")
     css = ""
+    ff = st.session_state.get("ff_sel", "default")
+    q, stack = FONT_OPT.get(ff, (None, None))
+    if stack:
+        if q:
+            css += f"@import url('https://fonts.googleapis.com/css2?family={q}&display=swap');"
+        css += f"{_FONT_SEL} {{ font-family:{stack} !important; }} :root:root {{ --tk-head:{stack}; }}"
     if FS_PX.get(fs, 16) != 16:
         css += f"html {{ font-size:{FS_PX[fs]}px !important; }}"
     if st.session_state.get("rd_mode"):
@@ -3399,6 +3451,12 @@ def read_css():
 def cb_fs(S_, v):
     st.session_state["fs_sel"] = v
     get_prefs(S_).setdefault("view", {})["fs"] = v
+    save_prefs(S_)
+
+
+def cb_ff(S_, v):
+    st.session_state["ff_sel"] = v if v in FONT_OPT else "default"
+    get_prefs(S_).setdefault("view", {})["font"] = st.session_state["ff_sel"]
     save_prefs(S_)
 
 
@@ -3600,53 +3658,98 @@ def avatar_ui(letter):
              key="av_clear", on_click=cb_av_clear, args=(S,))
 
 
-def settings_page(key, opts, choice):
-    dash_css()
-    st.title(ct("view_settings"))
-    with st.container(border=True):
-        sec(ct("set_g_avatar"))
-        avatar_ui(_uletter())
-    with st.container(border=True):
-        sec(ct("set_g_lang"))
-        lang_picker()
-    with st.container(border=True):
-        sec(ct("set_g_answer"))
-        st.selectbox(t("provider"), opts, index=opts.index(choice), key="w_choice", on_change=cb_choice,
-                     format_func=lambda k: t("p_smart") if k == "smart" else provider_label(k))
-        tgl(t("web"), "tg_web")
-        tgl(t("verify"), "tg_verify")
-    with st.container(border=True):
-        sec(ct("set_g_voice"))
-        tgl(t("speak"), "tg_speak")
-        tgl(t("voice"), "tg_voice")
-        if wide(st.button, t("voice_test")):
-            d_, e_ = speak(t("voice_test_text"), key)
-            show_audio(d_, e_, True)
-    with st.container(border=True):
-        sec(ct("set_g_look"))
-        theme_select()
-    with st.container(border=True):
-        sec(ct("set_g_read"))
-        st.caption(ct("set_fs"))
-        fs_cols = st.columns(4)
-        for c_, code_ in zip(fs_cols, ["s", "m", "l", "xl"]):
+def font_ui():
+    cur = st.session_state.get("ff_sel", "default")
+    names = {"default": ct("ff_default"), "system": ct("ff_system"), "ptsans": "PT Sans", "opensans": "Open Sans",
+             "plex": "IBM Plex Sans", "lora": "Lora", "notoserif": "Noto Serif"}
+    for r in range(0, len(FONT_ORDER), 2):
+        cols = st.columns(2)
+        for c_, f_ in zip(cols, FONT_ORDER[r:r + 2]):
             with c_:
-                wide(st.button, ct("fs_" + code_), key=f"fs_{code_}",
-                     type="primary" if st.session_state.get("fs_sel", "m") == code_ else "secondary",
-                     on_click=cb_fs, args=(S, code_))
-        wide(st.button, ("✓ " if st.session_state.get("rd_mode") else "") + ct("rd_mode"), key="rd_btn",
-             type="primary" if st.session_state.get("rd_mode") else "secondary", on_click=cb_rd, args=(S,))
-    if AUTH_ON:
+                wide(st.button, names[f_], key=f"ff_{f_}", type="primary" if cur == f_ else "secondary",
+                     on_click=cb_ff, args=(S, f_))
+    st.caption(ct("ff_h_" + cur))
+    st.markdown(f'<div class="tk-chip" style="display:block;margin-top:6px;padding:8px 12px;border-radius:12px;font-size:1rem;color:var(--tk-text)">'
+                f'{_e(ct("ff_sample"))}</div>', unsafe_allow_html=True)
+    st.caption(ct("set_fs"))
+    fs_cols = st.columns(4)
+    for c_, code_ in zip(fs_cols, ["s", "m", "l", "xl"]):
+        with c_:
+            wide(st.button, ct("fs_" + code_), key=f"fs_{code_}",
+                 type="primary" if st.session_state.get("fs_sel", "m") == code_ else "secondary",
+                 on_click=cb_fs, args=(S, code_))
+
+
+def settings_cat_ui(cat, key, opts, choice):
+    """Seçilmiş ayar kateqoriyasının məzmunu."""
+    if cat == "ui":
         with st.container(border=True):
-            sec(t("account"))
-            account_ui()
-    if IS_OWNER:
+            sec(ct("set_g_lang"))
+            lang_picker()
+        with st.container(border=True):
+            sec(ct("set_g_font"))
+            font_ui()
+        with st.container(border=True):
+            sec(ct("set_g_look"))
+            theme_select()
+        with st.container(border=True):
+            sec(ct("set_g_read"))
+            wide(st.button, ("✓ " if st.session_state.get("rd_mode") else "") + ct("rd_mode"), key="rd_btn",
+                 type="primary" if st.session_state.get("rd_mode") else "secondary", on_click=cb_rd, args=(S,))
+    elif cat == "profile":
+        with st.container(border=True):
+            sec(ct("set_g_avatar"))
+            avatar_ui(_uletter())
+        if AUTH_ON:
+            with st.container(border=True):
+                sec(t("account"))
+                account_ui()
+    elif cat == "answers":
+        with st.container(border=True):
+            sec(ct("set_g_answer"))
+            st.selectbox(t("provider"), opts, index=opts.index(choice), key="w_choice", on_change=cb_choice,
+                         format_func=lambda k: t("p_smart") if k == "smart" else provider_label(k))
+            tgl(t("web"), "tg_web")
+            tgl(t("verify"), "tg_verify")
+    elif cat == "voice":
+        with st.container(border=True):
+            sec(ct("set_g_voice"))
+            tgl(t("speak"), "tg_speak")
+            tgl(t("voice"), "tg_voice")
+            if wide(st.button, t("voice_test")):
+                d_, e_ = speak(t("voice_test_text"), key)
+                show_audio(d_, e_, True)
+    elif cat == "owner" and IS_OWNER:
         with st.container(border=True):
             sec(ct("set_g_owner"))
             providers_ui()
         with st.container(border=True):
             sec(ct("h_title"))
             health_ui()
+
+
+def settings_page(key, opts, choice):
+    dash_css()
+    cats = ["ui", "profile", "answers", "voice"] + (["owner"] if IS_OWNER else [])
+    cat = st.session_state.get("set_cat")
+    if cat not in cats:
+        cat = None
+        st.session_state["set_cat"] = None
+    if cat is None:
+        st.title(ct("view_settings"))
+        st.caption(ct("set_what"))
+        for r in range(0, len(cats), 2):
+            cols = st.columns(2)
+            for c_, k_ in zip(cols, cats[r:r + 2]):
+                with c_:
+                    with st.container(border=True):
+                        wide(st.button, ct("sc_" + k_), key=f"cat_{k_}", on_click=cb_setcat, args=(k_,))
+                        st.caption(ct("sc_" + k_ + "_h"))
+        return
+    wide(st.button, ct("set_back"), key="set_back_btn", on_click=cb_setcat, args=(None,))
+    st.title(ct("sc_" + cat))
+    st.caption(ct("sc_" + cat + "_h"))
+    settings_cat_ui(cat, key, opts, choice)
 
 
 def save_memory(key, chat_):
@@ -3707,6 +3810,12 @@ def cb_choice():
 
 def cb_view(v):
     st.session_state["view"] = v
+    if v == "settings":
+        st.session_state["set_cat"] = None  # Ayarlar düyməsi həmişə kateqoriya siyahısına aparır
+
+
+def cb_setcat(c):
+    st.session_state["set_cat"] = c
 
 
 # ======================= YAN PANEL =======================
@@ -3731,6 +3840,7 @@ if "fs_sel" not in st.session_state:
     _vp = get_prefs(S).get("view") or {}
     st.session_state["fs_sel"] = _vp.get("fs") if _vp.get("fs") in FS_PX else "m"
     st.session_state["rd_mode"] = bool(_vp.get("read"))
+    st.session_state["ff_sel"] = _vp.get("font") if _vp.get("font") in FONT_OPT else "default"
 _rc = read_css()
 if _rc:
     st.sidebar.markdown(_rc, unsafe_allow_html=True)
