@@ -407,6 +407,7 @@ div:has(> [role="listbox"]), div:has(> div > [role="listbox"]) {{
   transform:translateY(-3px) scale(1.02); box-shadow:0 10px 24px color-mix(in srgb, var(--tk-accent) 38%, transparent); filter:brightness(1.06);
 }}
 .stApp .stButton > button:active {{ transform:translateY(0) scale(.98); }}
+.stApp button[data-testid="stBaseButton-primary"], .stApp button[data-testid="stBaseButton-primaryFormSubmit"],
 .stApp .stButton > button[kind="primary"], .stApp [data-testid="stFormSubmitButton"] > button[kind="primaryFormSubmit"] {{
   background:linear-gradient(100deg, var(--tk-accent), var(--tk-accent2), var(--tk-accent)) !important;
   background-size:220% 100% !important; animation:tk-shine 6s ease-in-out infinite;
@@ -469,6 +470,32 @@ div:has(> [role="listbox"]), div:has(> div > [role="listbox"]) {{
   border:1px solid var(--tk-border) !important; border-radius:16px !important; box-shadow:var(--tk-shadow);
 }}
 [data-testid="stPopoverBody"] * {{ color:var(--tk-text); }}
+/* Popover: düymə və daxiletmələr .stApp-dan kənarda çəkilir, ona görə ayrıca tema verilir */
+[data-testid="stPopoverButton"], [data-testid="stPopover"] > button {{
+  background:var(--tk-surface) !important; color:var(--tk-text) !important;
+  border:1px solid var(--tk-border) !important; border-radius:12px !important;
+}}
+[data-testid="stPopoverButton"] *, [data-testid="stPopover"] > button * {{ color:var(--tk-text) !important; }}
+[data-testid="stPopoverButton"]:hover, [data-testid="stPopover"] > button:hover {{
+  border-color:var(--tk-accent) !important; box-shadow:var(--tk-shadow);
+}}
+[data-testid="stPopoverBody"] button[data-testid^="stBaseButton"] {{
+  background:var(--tk-surface2) !important; color:var(--tk-text) !important;
+  border:1px solid var(--tk-border) !important; border-radius:12px !important;
+}}
+[data-testid="stPopoverBody"] button[data-testid^="stBaseButton"] * {{ color:var(--tk-text) !important; }}
+[data-testid="stPopoverBody"] button[data-testid^="stBaseButton"]:hover {{ border-color:var(--tk-accent) !important; }}
+[data-testid="stPopoverBody"] button[data-testid="stBaseButton-primary"] {{
+  background:linear-gradient(100deg, var(--tk-accent), var(--tk-accent2), var(--tk-accent)) !important;
+  background-size:220% 100% !important; animation:tk-shine 6s ease-in-out infinite; border-color:transparent !important;
+}}
+[data-testid="stPopoverBody"] button[data-testid="stBaseButton-primary"] * {{ color:var(--tk-on) !important; }}
+[data-testid="stPopoverBody"] div[data-baseweb="input"], [data-testid="stPopoverBody"] div[data-baseweb="select"] {{
+  background:var(--tk-surface) !important; border:2px solid var(--tk-line) !important; border-radius:12px !important;
+}}
+[data-testid="stPopoverBody"] div[data-baseweb="input"] *, [data-testid="stPopoverBody"] div[data-baseweb="select"] * {{
+  background:transparent !important; color:var(--tk-text) !important;
+}}
 [data-testid="stFileUploaderDropzone"] {{
   background:var(--tk-surface2) !important; border:2px dashed var(--tk-line) !important; border-radius:14px !important;
 }}
