@@ -383,6 +383,20 @@ def wide(fn, *args, **kwargs):
         return fn(*args, use_container_width=True, **kwargs)
 
 
+def _flip(k):
+    st.session_state[k] = not bool(st.session_state.get(k))
+
+
+def tgl(label, key, help=None, default=False):
+    """Açar əvəzinə tema rəngli düymə: qoşulu = dolu rəng + ✓, söndürülü = konturlu. Qiymət: True/False."""
+    if key not in st.session_state:
+        st.session_state[key] = default
+    on = bool(st.session_state[key])
+    wide(st.button, ("✓ " if on else "") + label, key=f"tgl_{key}", help=help,
+         type="primary" if on else "secondary", on_click=_flip, args=(key,))
+    return bool(st.session_state[key])
+
+
 def read_json(path, default):
     try:
         with open(path, encoding="utf-8") as f:
@@ -1048,7 +1062,7 @@ def theme_select():
     st.selectbox(t("theme_title"), themes.ORDER, index=themes.ORDER.index(cur), key="theme_acc",
                  format_func=lambda k: themes.label(k, st.session_state.get("ui", "az")),
                  on_change=cb_theme)
-    st.toggle(t("anim_force"), key="anim_force", help=t("anim_help"))
+    tgl(t("anim_force"), "anim_force", help=t("anim_help"))
 
 
 def cb_delete(key, cid):
@@ -3132,11 +3146,11 @@ with st.sidebar.expander(ct("sb_settings")):
     choice = st.selectbox(
         t("provider"), ["smart"] + avail_ids,
         format_func=lambda k: t("p_smart") if k == "smart" else provider_label(k))
-    web_on = st.toggle(t("web"), value=False)
-    verify = st.toggle(t("verify"), value=False)
-    speak_on = st.toggle(t("speak"), value=False)
-    voice_in = st.toggle(t("voice"), value=False)
-    if st.button(t("voice_test")):
+    web_on = tgl(t("web"), "tg_web")
+    verify = tgl(t("verify"), "tg_verify")
+    speak_on = tgl(t("speak"), "tg_speak")
+    voice_in = tgl(t("voice"), "tg_voice")
+    if wide(st.button, t("voice_test")):
         d_, e_ = speak(t("voice_test_text"), key)
         show_audio(d_, e_, True, st.sidebar)
 list_box = st.sidebar.container()
