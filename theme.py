@@ -222,6 +222,19 @@ section.main, .main, [data-testid="stApp"] > div {{ background:transparent !impo
 .stApp [data-testid="stSelectbox"] button, .stApp [data-testid="stMultiSelect"] button {{
   background:transparent !important; border:0 !important;
 }}
+/* tarix sahəsi: quruluşdan asılı olmayaraq oxunaqlı (açıq fonda açıq mətn olmasın) */
+.stApp [data-testid="stDateInput"] input, .stApp [data-testid="stDateInput"] span,
+.stApp [data-testid="stDateInput"] div {{
+  background:transparent !important; background-color:transparent !important;
+  color:var(--tk-text) !important; -webkit-text-fill-color:var(--tk-text) !important; box-shadow:none !important;
+}}
+.stApp [data-testid="stDateInput"] > div:not([data-testid="stWidgetLabel"]) {{
+  background:var(--tk-surface) !important; border:2px solid var(--tk-line) !important; border-radius:12px !important;
+}}
+.stApp [data-testid="stDateInput"] > div:not([data-testid="stWidgetLabel"]):focus-within {{
+  border-color:var(--tk-accent) !important; box-shadow:{glow} !important;
+}}
+.stApp [data-testid="stDateInput"] svg {{ fill:var(--tk-muted) !important; color:var(--tk-muted) !important; }}
 
 /* açılan siyahı: BaseWeb olmasa da role="listbox" ilə tapılır */
 [role="listbox"], [data-testid="stSelectboxVirtualDropdown"],

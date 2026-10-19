@@ -603,6 +603,14 @@ def stream_one(pid, system, msgs, temp, web, media=None):
     return openai_stream(pid, system, msgs, temp)
 
 
+_CJK = re.compile("[⺀-⿟぀-ヿ㐀-䶿一-鿿가-힯豈-﫿]")
+
+
+def clean_tok(t):
+    """Modelin təsadüfən yazdığı Çin/Yapon/Koreya simvollarını silir (cavab AZ/EN-dir)."""
+    return _CJK.sub("", t) if t else t
+
+
 def stream_answer(system, msgs, plan, temp=0.3, media=None):
     """plan: [(provayder, veb_axtarışı)] ardıcıllığı. Birincisi alınmasa növbətisinə keçir."""
     st.session_state["web_sources"] = []
@@ -618,7 +626,7 @@ def stream_answer(system, msgs, plan, temp=0.3, media=None):
         try:
             for tok in stream_one(pid, system, msgs, temp, web, media):
                 got = True
-                yield tok
+                yield clean_tok(tok)
             if got:
                 st.session_state["used"] = pid + ("+web" if web else "")
                 return
@@ -2346,8 +2354,9 @@ def themed_bars(rows_):
     """Tema rənglərində, fonsuz yığılmış sütun qrafiki. rows_: [{"day","series","value"}, ...]."""
     p = _pal()
     multi = len({r["series"] for r in rows_}) > 1
+    n_days = len({r["day"] for r in rows_})
     axis_x = {"title": None, "labelColor": p["muted"], "domainColor": p["border"], "tickColor": p["border"],
-              "labelAngle": -45, "labelFontSize": 11}
+              "labelAngle": 0 if n_days <= 10 else -45, "labelFontSize": 11, "labelOverlap": "parity"}
     axis_y = {"title": None, "labelColor": p["muted"], "gridColor": p["border"], "domain": False,
               "tickMinStep": 1, "labelFontSize": 11}
     spec = {
