@@ -323,7 +323,8 @@ db = get_db()
 USAGE = "usage.json"
 
 st.set_page_config(page_title="Tutor Komandam", page_icon="🎓", layout="wide")
-st.session_state.setdefault("ui", "az")
+st.session_state.setdefault("ui", st.session_state.get("ui_keep", "az"))
+st.session_state["ui_keep"] = st.session_state["ui"]  # giriş səhifəsindəki radio yox olsa da dil qalsın
 st.session_state.setdefault("cid", None)
 st.session_state.setdefault("mic_n", 0)
 st.session_state.setdefault("att_n", 0)
@@ -3122,9 +3123,20 @@ if AUTH_ON:
         f'<small>{_e(t("quota"))}: {_used}/{_lim}</small>'
         f'<div class="tk-bar{_warn}"><i style="width:{min(100, round(_used / _lim * 100))}%"></i></div></div></div>',
         unsafe_allow_html=True)
-st.sidebar.radio(
-    "🌐", ["az", "en"], key="ui", horizontal=True,
-    format_func=lambda x: {"az": "Azərbaycanca", "en": "English"}[x])
+def cb_ui(v):
+    st.session_state["ui"] = v
+    st.session_state["ui_keep"] = v
+
+
+def cb_mode(v):
+    st.session_state["mode_sel"] = v
+
+
+_lang_cols = st.sidebar.columns(2)
+for _c, (_code, _name) in zip(_lang_cols, [("az", "Azərbaycanca"), ("en", "English")]):
+    with _c:
+        wide(st.button, _name, key=f"lang_{_code}",
+             type="primary" if st.session_state.get("ui") == _code else "secondary", on_click=cb_ui, args=(_code,))
 
 # bölmələr: 2 sütunlu düymə şəbəkəsi, aktiv olan tema rəngində dolu
 _views = ["chat", "cards", "plan", "stats"] + (["owner"] if (AUTH_ON and IS_OWNER) else [])
@@ -3139,7 +3151,16 @@ for _n, _v in enumerate(_views):
 view = st.session_state["view"]
 
 key = st.sidebar.selectbox(t("subject"), SUBJ_KEYS, format_func=subj_name)
-mode = st.sidebar.radio(t("mode"), ["learn", "practice", "exam", "feynman"], format_func=lambda k: t("m_" + k))
+_MODES = ["learn", "practice", "exam", "feynman"]
+if st.session_state.get("mode_sel") not in _MODES:
+    st.session_state["mode_sel"] = "learn"
+st.sidebar.markdown(f'<div class="sb-label">{_e(t("mode"))}</div>', unsafe_allow_html=True)
+_mode_cols = st.sidebar.columns(2)
+for _n, _m in enumerate(_MODES):
+    with _mode_cols[_n % 2]:
+        wide(st.button, t("m_" + _m), key=f"mode_{_m}",
+             type="primary" if st.session_state["mode_sel"] == _m else "secondary", on_click=cb_mode, args=(_m,))
+mode = st.session_state["mode_sel"]
 
 avail_ids = [p for p in PROVIDERS if available(p) and (IS_OWNER or PROVIDERS[p]["free"])]
 with st.sidebar.expander(ct("sb_settings")):
