@@ -363,7 +363,7 @@ class LocalStore:
 
     def set_prefs(self, prefs):
         try:
-            if len(json.dumps(prefs, ensure_ascii=False)) > 20000:
+            if len(json.dumps(prefs, ensure_ascii=False)) > 60000:
                 return False
             with open(self._prefs_path(), "w", encoding="utf-8") as f:
                 json.dump(prefs, f, ensure_ascii=False)
@@ -389,6 +389,43 @@ class LocalStore:
             return True
         except Exception:
             return False
+
+    # ---- 👍/👎 rəy (yerli: cards/_feedback.json)
+    def _fb_path(self):
+        os.makedirs(os.path.join(self.base, "cards"), exist_ok=True)
+        return os.path.join(self.base, "cards", "_feedback.json")
+
+    def _fb_load(self):
+        try:
+            with open(self._fb_path(), encoding="utf-8") as f:
+                rows = json.load(f)
+            return rows if isinstance(rows, list) else []
+        except Exception:
+            return []
+
+    def get_feedback(self, key, cid):
+        return {r["idx"]: r["rating"] for r in self._fb_load()
+                if r.get("subject") == key and r.get("chat_id") == cid and r.get("rating") in (1, -1)}
+
+    def set_feedback(self, key, cid, idx, rating, question="", answer=""):
+        rows = [r for r in self._fb_load()
+                if not (r.get("subject") == key and r.get("chat_id") == cid and r.get("idx") == idx)]
+        if rating in (1, -1):
+            rows.append({"subject": key, "chat_id": cid, "idx": idx, "rating": rating,
+                         "question": (question or "")[:200], "answer": (answer or "")[:400], "created": now_iso()})
+        try:
+            with open(self._fb_path(), "w", encoding="utf-8") as f:
+                json.dump(rows[-500:], f, ensure_ascii=False)
+            return True
+        except Exception:
+            return False
+
+    def owner_feedback(self, limit=20):
+        rows = self._fb_load()
+        down = [r for r in rows if r.get("rating") == -1][-limit:][::-1]
+        return {"up": sum(1 for r in rows if r.get("rating") == 1), "down": sum(1 for r in rows if r.get("rating") == -1),
+                "recent": [{"subject": r.get("subject"), "question": r.get("question"), "answer": r.get("answer"),
+                            "created_at": r.get("created")} for r in down]}
 
     def owner_overview(self, days=7):
         return None
@@ -529,7 +566,7 @@ class SupabaseStore:
 
     def set_prefs(self, prefs):
         try:
-            if len(json.dumps(prefs, ensure_ascii=False)) > 20000:
+            if len(json.dumps(prefs, ensure_ascii=False)) > 60000:
                 return False
             self._db().table("profiles").update({"prefs": prefs}).eq("id", self.user_id).execute()
             return True
@@ -640,6 +677,38 @@ class SupabaseStore:
             d = out.setdefault(r["day"], {"reviews": 0, "questions": 0})
             d["questions"] += r["count"]
         return out
+
+    # ---- 👍/👎 rəy (feedback cədvəli; feedback.sql işlədilməyibsə səssizcə işləmir)
+    def get_feedback(self, key, cid):
+        try:
+            rows = (self._db().table("feedback").select("msg_idx,rating").eq("subject", key).eq("chat_id", str(cid))
+                    .limit(500).execute().data) or []
+            return {r["msg_idx"]: r["rating"] for r in rows}
+        except SessionExpired:
+            raise
+        except Exception:
+            return {}
+
+    def set_feedback(self, key, cid, idx, rating, question="", answer=""):
+        try:
+            db = self._db()
+            if rating in (1, -1):
+                db.table("feedback").upsert(
+                    {"user_id": self.user_id, "subject": key, "chat_id": str(cid), "msg_idx": int(idx),
+                     "rating": int(rating), "question": (question or "")[:200], "answer": (answer or "")[:400]},
+                    on_conflict="user_id,chat_id,msg_idx").execute()
+            else:
+                db.table("feedback").delete().eq("chat_id", str(cid)).eq("msg_idx", int(idx)).execute()
+            return True
+        except SessionExpired:
+            raise
+        except Exception:
+            return False
+
+    def owner_feedback(self, limit=20):
+        """Yalnız sahib üçün (Supabase funksiyası özü yoxlayır)."""
+        res = self._db().rpc("owner_feedback", {"p_limit": int(limit)}).execute()
+        return res.data
 
     def owner_overview(self, days=7):
         """Yalnız sahib üçün (Supabase funksiyası özü yoxlayır). days: 1, 7, 28; 0 = bütün zaman."""

@@ -1,4 +1,4 @@
-import os, re, json, time, hmac, hashlib, datetime
+import os, re, json, time, hmac, hashlib, datetime, base64, io
 import streamlit as st
 import chromadb
 from google import genai
@@ -144,7 +144,7 @@ TXT = {
         "lib_note": "Bu hesabda kitab materialları bağlıdır. Tutor profil və ümumi biliklə cavab verir.",
         "privacy": ("Məxfilik: söhbətlərin hesabında saxlanır, digər istifadəçilər görmür. Layihə sahibi texniki olaraq "
                     "verilənlər bazasına çıxışa malikdir. Sorğular Google (Gemini) və ya Groq-a göndərilir; pulsuz "
-                    "səviyyədə provayderlər məlumatı məhsulu yaxşılaşdırmaq üçün istifadə edə bilər. Həssas məlumat yazma."),
+                    "səviyyədə provayderlər məlumatı məhsulu yaxşılaşdırmaq üçün istifadə edə bilər. Həssas məlumat yazma. 👍/👎 verdikdə sualın və cavabın qısa hissəsi də saxlanılır."),
         "save_err": "Söhbət saxlanmadı. Bir az sonra yenidən cəhd et.",
     },
     "en": {
@@ -235,7 +235,7 @@ TXT = {
         "lib_note": "Course book materials are not available on this account. The tutor answers from its profile and general knowledge.",
         "privacy": ("Privacy: your chats are stored in your account and other users cannot see them. The project owner "
                     "technically has access to the database. Requests are sent to Google (Gemini) or Groq; on free tiers "
-                    "providers may use data to improve their products. Do not write sensitive information."),
+                    "providers may use data to improve their products. Do not write sensitive information. When you vote 👍/👎, a short part of the question and answer is stored too."),
         "save_err": "The chat could not be saved. Try again in a moment.",
     },
 }
@@ -471,7 +471,38 @@ def is_busy(e):
                                 "overloaded", "rate_limit", "Rate limit", "529"))
 
 
+ERR_LOG = "error_log.jsonl"
+_SECRET = re.compile(r"(AIza[0-9A-Za-z_\-]{20,}|gsk_[A-Za-z0-9]{16,}|sk-[A-Za-z0-9_\-]{16,}|pplx-[A-Za-z0-9]{16,}"
+                     r"|sb_secret_\w+|eyJ[\w\-\.]{20,})")
+
+
+def log_error(where, e):
+    """Xətanı error_log.jsonl-ə yazır (açar kimi görünən hissələr silinir). Heç vaxt xəta atmır."""
+    try:
+        row = {"t": datetime.datetime.now().isoformat(timespec="seconds"), "where": str(where)[:30],
+               "msg": _SECRET.sub("***", str(e))[:300]}
+        with open(ERR_LOG, "a", encoding="utf-8") as f:
+            f.write(json.dumps(row, ensure_ascii=False) + "\n")
+        if os.path.getsize(ERR_LOG) > 200_000:
+            with open(ERR_LOG, encoding="utf-8") as f:
+                keep = f.readlines()[-300:]
+            with open(ERR_LOG, "w", encoding="utf-8") as f:
+                f.writelines(keep)
+    except Exception:
+        pass
+
+
+def read_errors(n=15):
+    try:
+        with open(ERR_LOG, encoding="utf-8") as f:
+            rows = [json.loads(x) for x in f.readlines()[-n:] if x.strip()]
+        return rows[::-1]
+    except Exception:
+        return []
+
+
 def friendly(e):
+    log_error(st.session_state.get("view", "chat"), e)
     s = str(e)
     if s.startswith("MULTI:"):
         head = {"en": "Could not get an answer. ", "ru": "Не удалось получить ответ. "}.get(st.session_state.get("ui"), "Cavab alınmadı. ")
@@ -1791,9 +1822,27 @@ CT = {
         "sb_settings": "⚙️ Ayarlar", "view_settings": "⚙️ Ayarlar",
         "set_g_answer": "Cavab seçimləri", "set_g_voice": "Səs", "set_g_look": "Görünüş",
         "set_g_owner": "Sahib üçün: provayderlər", "set_g_lang": "İnterfeys dili",
+        "fb_up": "Cavab faydalı idi", "fb_down": "Cavab yaxşı deyil", "fb_thanks": "Təşəkkür! Rəyin yazıldı.",
+        "o_fb_title": "👍/👎 rəylər", "o_fb_votes": "👍 {u} · 👎 {d}", "o_fb_none": "Hələ 👎 rəy yoxdur.",
+        "o_fb_need_sql": "Rəy cədvəli yoxdur: feedback.sql Supabase-də işlədilməyib.",
+        "dl_answer": "Cavabı yüklə (.md)", "dl_chat": "⬇️ Söhbəti yüklə (.md)",
+        "md_q": "Sual", "md_a": "Cavab", "md_src": "Mənbələr",
+        "h_title": "Sağlamlıq yoxlaması", "h_gemini": "Gemini açarı", "h_store": "Verilənlər bazası (Supabase)",
+        "h_books": "Kitab bazası", "h_errors": "Son xətalar", "h_noerr": "Xəta qeydi yoxdur.",
+        "set_g_read": "Oxu rahatlığı", "set_fs": "Şrift ölçüsü",
+        "fs_s": "Kiçik", "fs_m": "Normal", "fs_l": "Böyük", "fs_xl": "Çox böyük",
+        "rd_mode": "📖 Oxu rejimi (geniş sətir aralığı, oxunaqlı şrift)",
         "d_c_m": "{m}/{t} öyrənilib", "d_c_d": "{d} bu gün təkrar", "d_c_c": "{c} söhbət",
         "g_label": "🎯 Gündəlik hədəf", "g_off": "Söndürülü", "g_n": "{n} təkrar",
         "g_prog": "Bu gün: {n}/{g} təkrar", "g_done": "🎯 Gündəlik hədəf tamamlandı. Əla!",
+        "view_memory": "🧠 Yaddaşım", "set_g_avatar": "Profil şəkli",
+        "av_hint": "Öz şəklini yüklə və ya hazır avatar seç. Söhbətdə mesajlarının yanında görünəcək.",
+        "av_upload": "Şəkil yüklə (JPG, PNG, WEBP; 5 MB-a qədər)", "av_emoji": "Və ya hazır avatar seç",
+        "av_default": "Hərf (standart)", "av_remove": "Şəkli sil",
+        "av_saved": "Profil şəkli yadda saxlandı.", "av_bad": "Şəkil oxunmadı. JPG, PNG və ya WEBP yoxla.",
+        "av_big": "Fayl çox böyükdür (maksimum 5 MB).", "av_fail": "Yadda saxlamaq alınmadı. Bir azdan yenidən cəhd et.",
+        "mem_hint": "Tutor bu qeydləri söhbətləri yaddaşa yazdıqca öyrənir: zəif mövzular, səhvlər, növbəti addımlar. Fən: {s}.",
+        "mem_pick": "Hansı söhbət yaddaşa yazılsın?", "mem_need_chat": "Bu fənn üzrə hələ söhbət yoxdur. Əvvəlcə Söhbət bölməsində sual ver.",
     },
     "en": {
         "view": "Section", "view_chat": "💬 Chat", "view_cards": "🃏 Cards",
@@ -1871,9 +1920,27 @@ CT = {
         "sb_settings": "⚙️ Settings", "view_settings": "⚙️ Settings",
         "set_g_answer": "Answer options", "set_g_voice": "Voice", "set_g_look": "Appearance",
         "set_g_owner": "Owner: providers", "set_g_lang": "Interface language",
+        "fb_up": "The answer helped", "fb_down": "The answer is not good", "fb_thanks": "Thanks! Your feedback was saved.",
+        "o_fb_title": "👍/👎 feedback", "o_fb_votes": "👍 {u} · 👎 {d}", "o_fb_none": "No 👎 feedback yet.",
+        "o_fb_need_sql": "The feedback table is missing: feedback.sql was not run in Supabase.",
+        "dl_answer": "Download answer (.md)", "dl_chat": "⬇️ Download chat (.md)",
+        "md_q": "Question", "md_a": "Answer", "md_src": "Sources",
+        "h_title": "Health check", "h_gemini": "Gemini key", "h_store": "Database (Supabase)",
+        "h_books": "Book index", "h_errors": "Recent errors", "h_noerr": "No errors logged.",
+        "set_g_read": "Reading comfort", "set_fs": "Font size",
+        "fs_s": "Small", "fs_m": "Normal", "fs_l": "Large", "fs_xl": "Extra large",
+        "rd_mode": "📖 Reading mode (wider line spacing, readable font)",
         "d_c_m": "{m}/{t} mastered", "d_c_d": "{d} due today", "d_c_c": "{c} chats",
         "g_label": "🎯 Daily goal", "g_off": "Off", "g_n": "{n} reviews",
         "g_prog": "Today: {n}/{g} reviews", "g_done": "🎯 Daily goal reached. Great job!",
+        "view_memory": "🧠 My memory", "set_g_avatar": "Profile picture",
+        "av_hint": "Upload your own photo or pick a ready avatar. It appears next to your messages in the chat.",
+        "av_upload": "Upload a photo (JPG, PNG, WEBP; up to 5 MB)", "av_emoji": "Or pick an avatar",
+        "av_default": "Letter (default)", "av_remove": "Remove photo",
+        "av_saved": "Profile picture saved.", "av_bad": "Could not read the image. Try JPG, PNG or WEBP.",
+        "av_big": "The file is too large (5 MB max).", "av_fail": "Could not save. Please try again in a moment.",
+        "mem_hint": "The tutor learns these notes each time you save a chat to memory: weak topics, mistakes, next steps. Subject: {s}.",
+        "mem_pick": "Which chat should be saved to memory?", "mem_need_chat": "There is no chat for this subject yet. Ask a question in the Chat section first.",
     },
 }
 if lang_ru:
@@ -2526,7 +2593,9 @@ DASH_CSS = """<style>
 .tk-chip.warn{color:#E5484D;border-color:#E5484D}
 .tk-row{display:flex;align-items:center;gap:12px;padding:12px 0;border-top:1px solid var(--tk-border)}
 .tk-row:first-child{border-top:0}
-.tk-av{width:36px;height:36px;border-radius:50%;flex:none;display:grid;place-items:center;font-weight:700;background:linear-gradient(135deg,var(--tk-accent),var(--tk-accent2));color:var(--tk-on)}
+.tk-av{width:36px;height:36px;border-radius:50%;flex:none;display:grid;place-items:center;font-weight:700;background:linear-gradient(135deg,var(--tk-accent),var(--tk-accent2));color:var(--tk-on);overflow:hidden}
+.tk-av img{width:100%;height:100%;object-fit:cover;display:block}
+.tk-av.tk-av-e{background:var(--tk-surface2);border:1px solid var(--tk-border);font-weight:400}
 .tk-grow{flex:1;min-width:0;color:var(--tk-text)}
 .tk-grow b{display:block;overflow:hidden;text-overflow:ellipsis}
 .tk-grow small,.tk-side small{color:var(--tk-muted);font-size:.76rem}
@@ -2704,6 +2773,7 @@ def owner_page(S_):
     sec(ct("o_tbl"))
     if users:
         user_rows(users)
+    owner_feedback_ui(S_)
 
 
 # ======================= PLAN: imtahan tarixinə qədər + xülasə və mövzu xəritəsi =======================
@@ -3144,6 +3214,8 @@ SB_CSS = """<style>
 .sb-name{font-family:var(--tk-head);font-weight:700;font-size:1.05rem;line-height:1.15;color:var(--tk-text)}
 .sb-user{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:16px;background:var(--tk-surface);border:1px solid var(--tk-border);box-shadow:var(--tk-shadow);margin-bottom:10px}
 .sb-user .tk-bar{height:7px;margin-top:6px}
+.st-key-sb_foot{position:sticky;bottom:0;z-index:20;margin-top:auto;padding:10px 0 6px;background:linear-gradient(180deg,transparent,var(--tk-surface) 28%)}
+[data-testid="stSidebarUserContent"]>[data-testid="stVerticalBlock"]{min-height:calc(100vh - 7rem)}
 .sb-label{font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:var(--tk-muted);margin:12px 0 6px;font-weight:600}
 </style>"""
 
@@ -3214,9 +3286,326 @@ def providers_ui():
     st.caption(t("usage") + ": " + ", ".join(f"{k} {v}" for k, v in u.items() if k != "date"))
 
 
+# ======================= 👍/👎 RƏY, YÜKLƏMƏ, SAĞLAMLIQ, OXU RAHATLIĞI =======================
+def get_fb(S_, key, cid):
+    c = st.session_state.setdefault("fb_cache", {})
+    if (key, cid) not in c:
+        c[(key, cid)] = sc(S_.get_feedback, key, cid, default={}) or {}
+    return c[(key, cid)]
+
+
+def cb_fb(S_, key, cid, idx, rating, q, a):
+    cache = get_fb(S_, key, cid)
+    new = 0 if cache.get(idx) == rating else rating
+    sc(S_.set_feedback, key, cid, idx, new, q[:200], a[:400], default=False)
+    cache[idx] = new
+    if new:
+        st.toast(ct("fb_thanks"))
+
+
+def _src_line(m):
+    srcs = m.get("sources") or []
+    if not srcs:
+        return ""
+    return "**" + ct("md_src") + ":** " + "; ".join(f"{x.get('src', '?')}, {t('page_word')} {x.get('page', '?')}" for x in srcs)
+
+
+def answer_md(q, m, key):
+    parts = [f"# {subj_name(key)}", ""]
+    if q:
+        parts += [f"## {ct('md_q')}", "", q, ""]
+    parts += [f"## {ct('md_a')}", "", m.get("content", ""), ""]
+    sl = _src_line(m)
+    if sl:
+        parts += [sl, ""]
+    return "\n".join(parts)
+
+
+def chat_md(chat, key):
+    parts = [f"# {chat.get('title') or subj_name(key)}", ""]
+    for m in chat["messages"]:
+        who = ct("md_q") if m["role"] == "user" else ct("md_a")
+        parts += [f"## {who}", "", m.get("content", ""), ""]
+        if m["role"] == "assistant":
+            sl = _src_line(m)
+            if sl:
+                parts += [sl, ""]
+    return "\n".join(parts)
+
+
+def owner_feedback_ui(S_):
+    sec(ct("o_fb_title"))
+    try:
+        data = S_.owner_feedback(20)
+    except store.SessionExpired:
+        drop_login()
+        st.rerun()
+        return
+    except Exception:
+        st.caption(ct("o_fb_need_sql"))
+        return
+    data = data or {}
+    st.caption(ct("o_fb_votes", u=data.get("up", 0), d=data.get("down", 0)))
+    recent = data.get("recent") or []
+    if not recent:
+        st.caption(ct("o_fb_none"))
+    for r in recent:
+        with st.expander(f"👎 {r.get('subject', '')}: {(r.get('question') or '')[:70]}"):
+            st.text((r.get("question") or "")[:200])
+            st.text((r.get("answer") or "")[:400])
+
+
+def health_ui():
+    ok = lambda b: "✅" if b else "❌"
+    st.caption(f"{ok(bool(os.getenv('GEMINI_API_KEY')))} {ct('h_gemini')}")
+    if AUTH_ON:
+        try:
+            S.usage_today()
+            good = True
+        except Exception:
+            good = False
+        st.caption(f"{ok(good)} {ct('h_store')}")
+    books = []
+    for k_ in SUBJ_KEYS:
+        try:
+            books.append(f"{k_}: {db.get_collection('c_' + k_).count()}")
+        except Exception:
+            books.append(f"{k_}: ?")
+    st.caption(f"📚 {ct('h_books')}: " + ", ".join(books))
+    errs = read_errors(15)
+    with st.expander(ct("h_errors") + f" ({len(errs)})"):
+        if not errs:
+            st.caption(ct("h_noerr"))
+        for r in errs:
+            st.text(f"{r.get('t', '')} [{r.get('where', '')}] {r.get('msg', '')}")
+
+
+FS_PX = {"s": 14, "m": 16, "l": 18, "xl": 20}
+
+
+def read_css():
+    fs = st.session_state.get("fs_sel", "m")
+    css = ""
+    if FS_PX.get(fs, 16) != 16:
+        css += f"html {{ font-size:{FS_PX[fs]}px !important; }}"
+    if st.session_state.get("rd_mode"):
+        css += ("""[data-testid="stChatMessage"] p, [data-testid="stChatMessage"] li {
+                   line-height:1.9 !important; font-size:1.06em !important;
+                   font-family:Georgia, 'Times New Roman', serif !important; }
+                 [data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] { max-width:48rem; }""")
+    return f"<style>{css}</style>" if css else ""
+
+
+def cb_fs(S_, v):
+    st.session_state["fs_sel"] = v
+    get_prefs(S_).setdefault("view", {})["fs"] = v
+    save_prefs(S_)
+
+
+def cb_rd(S_):
+    st.session_state["rd_mode"] = not st.session_state.get("rd_mode")
+    get_prefs(S_).setdefault("view", {})["read"] = bool(st.session_state["rd_mode"])
+    save_prefs(S_)
+
+
+# ======================= PROFİL ŞƏKLİ / AVATAR =======================
+AV_EMOJI = ["🦊", "🐼", "🐯", "🦁", "🐸", "🐵", "🦉", "🐧", "🐙", "🦄",
+            "🚀", "🎓", "📚", "🧠", "⚡", "🌟", "🔥", "🎯", "🌈", "🎧"]
+AV_MAX_UPLOAD = 5 * 1024 * 1024
+AV_SIZE = 128  # saxlanan şəkil 128x128 JPEG (təxminən 5 KB), profil seçimlərinin içində
+
+
+def make_avatar_jpeg(data):
+    """Yüklənən şəkli mərkəzdən kvadrat kəsib 128x128 JPEG edir. EXIF və digər metadata silinir.
+    Şəkil olmayan və ya şübhəli böyük fayl ValueError verir."""
+    from PIL import Image, ImageOps
+    im = Image.open(io.BytesIO(data))
+    if im.format not in ("JPEG", "PNG", "WEBP"):
+        raise ValueError("format")
+    if im.width * im.height > 40_000_000:
+        raise ValueError("pixels")
+    im.load()
+    im = ImageOps.exif_transpose(im)
+    if im.mode in ("RGBA", "LA", "P"):
+        im = im.convert("RGBA")
+        bg = Image.new("RGB", im.size, (255, 255, 255))
+        bg.paste(im, mask=im.split()[-1])
+        im = bg
+    else:
+        im = im.convert("RGB")
+    s = min(im.size)
+    left, top = (im.width - s) // 2, (im.height - s) // 2
+    im = im.crop((left, top, left + s, top + s)).resize((AV_SIZE, AV_SIZE), Image.LANCZOS)
+    out = io.BytesIO()
+    im.save(out, "JPEG", quality=82, optimize=True)
+    return out.getvalue()
+
+
+def avatar_pref(S_):
+    a = get_prefs(S_).get("avatar")
+    return a if isinstance(a, dict) else {}
+
+
+def avatar_photo(S_):
+    """Yadda saxlanmış şəklin JPEG baytları (yoxlanmış), yoxdursa None. Seansda keşlənir."""
+    a = avatar_pref(S_)
+    if a.get("type") != "photo":
+        return None
+    d = a.get("data")
+    c = st.session_state.get("_av_cache")
+    if c and c[0] == d:
+        return c[1]
+    raw = None
+    try:
+        b = base64.b64decode(d, validate=True)
+        if b[:2] == b"\xff\xd8" and len(b) <= 45000:
+            raw = b
+    except Exception:
+        raw = None
+    st.session_state["_av_cache"] = (d, raw)
+    return raw
+
+
+def avatar_emoji(S_):
+    a = avatar_pref(S_)
+    return a.get("v") if a.get("type") == "emoji" and a.get("v") in AV_EMOJI else None
+
+
+def _hex_rgb(h):
+    h = h.lstrip("#")
+    return tuple(int(h[i:i + 2], 16) for i in (0, 2, 4))
+
+
+def letter_avatar(letter):
+    """Şəkil seçilməyibsə: tema rəngində dairə içində ilk hərf (PNG baytı). Alınmasa None (Streamlit standartı)."""
+    ck = (letter, cur_theme())
+    c = st.session_state.get("_av_letter")
+    if c and c[0] == ck:
+        return c[1]
+    png = None
+    try:
+        from PIL import Image, ImageDraw, ImageFont
+        p = themes.THEMES[cur_theme()]
+        n = 256
+        im = Image.new("RGBA", (n, n), (0, 0, 0, 0))
+        d = ImageDraw.Draw(im)
+        d.ellipse((0, 0, n - 1, n - 1), fill=_hex_rgb(p["accent"]) + (255,))
+        f = ImageFont.load_default(size=130)
+        d.text((n / 2, n / 2), letter[:1].upper(), fill=_hex_rgb(p["on_accent"]) + (255,), font=f, anchor="mm")
+        im = im.resize((AV_SIZE, AV_SIZE), Image.LANCZOS)
+        out = io.BytesIO()
+        im.save(out, "PNG")
+        png = out.getvalue()
+    except Exception:
+        png = None
+    st.session_state["_av_letter"] = (ck, png)
+    return png
+
+
+def chat_avatar(S_, letter):
+    """Söhbətdə istifadəçi mesajının avatarı: foto, emoji, yoxsa hərf. None olarsa Streamlit standartı qalır."""
+    raw = avatar_photo(S_)
+    if raw:
+        return raw
+    em = avatar_emoji(S_)
+    if em:
+        return em
+    return letter_avatar(letter) if letter and letter != "?" else None
+
+
+def avatar_html(S_, letter, size=36):
+    """Yan paneldə və ayarlarda dairəvi avatar (HTML). Daxil olan məlumat ağ siyahı və ya yenidən kodlanmış baytdır."""
+    st_ = f'style="width:{size}px;height:{size}px;font-size:{round(size * 0.44)}px"'
+    raw = avatar_photo(S_)
+    if raw:
+        b64 = base64.b64encode(raw).decode("ascii")
+        return f'<div class="tk-av" {st_}><img alt="" src="data:image/jpeg;base64,{b64}"></div>'
+    em = avatar_emoji(S_)
+    if em:
+        return f'<div class="tk-av tk-av-e" {st_}>{em}</div>'
+    return f'<div class="tk-av" {st_}>{_e((letter or "?")[:1].upper())}</div>'
+
+
+def _av_save(S_, new, old):
+    p = get_prefs(S_)
+    if new is None:
+        p.pop("avatar", None)
+    else:
+        p["avatar"] = new
+    save_prefs(S_)
+    if not st.session_state.get("prefs_ok"):
+        if old is None:
+            p.pop("avatar", None)
+        else:
+            p["avatar"] = old  # yazıla bilmədi: köhnə vəziyyətə qayıt
+        st.session_state["av_msg"] = "av_fail"
+        return False
+    st.session_state["av_msg"] = "av_saved"
+    return True
+
+
+def cb_av_upload(S_, n):
+    f = st.session_state.get(f"av_up_{n}")
+    if f is None:
+        return
+    st.session_state["av_up_n"] = n + 1  # yükləyici sıfırlanır
+    try:
+        data = f.getvalue()
+        if len(data) > AV_MAX_UPLOAD:
+            st.session_state["av_msg"] = "av_big"
+            return
+        jpg = make_avatar_jpeg(data)
+    except Exception:
+        st.session_state["av_msg"] = "av_bad"
+        return
+    _av_save(S_, {"type": "photo", "data": base64.b64encode(jpg).decode("ascii")}, avatar_pref(S_) or None)
+
+
+def cb_av_emoji(S_, e):
+    _av_save(S_, {"type": "emoji", "v": e}, avatar_pref(S_) or None)
+
+
+def cb_av_clear(S_):
+    _av_save(S_, None, avatar_pref(S_) or None)
+
+
+def _uletter():
+    """Avatar üçün hərf: istifadəçi adının ilk simvolu (giriş yoxdursa '?')."""
+    return re.sub(r"[^a-z0-9_]", "", str(getattr(S, "username", "") or "").lower()) or "?"
+
+
+def avatar_ui(letter):
+    msg = st.session_state.pop("av_msg", None)
+    c_prev, c_txt = st.columns([1, 5])
+    with c_prev:
+        st.markdown(avatar_html(S, letter, 72), unsafe_allow_html=True)
+    with c_txt:
+        st.caption(ct("av_hint"))
+    n = st.session_state.setdefault("av_up_n", 0)
+    st.file_uploader(ct("av_upload"), type=["jpg", "jpeg", "png", "webp"], key=f"av_up_{n}",
+                     on_change=cb_av_upload, args=(S, n))
+    if msg:
+        (st.success if msg == "av_saved" else st.warning)(ct(msg))
+    st.markdown(f"**{ct('av_emoji')}**")
+    cur_e = avatar_emoji(S)
+    per = 5
+    for r in range(0, len(AV_EMOJI), per):
+        cols = st.columns(per)
+        for c_, e_ in zip(cols, AV_EMOJI[r:r + per]):
+            with c_:
+                wide(st.button, e_, key=f"av_e_{e_}", type="primary" if e_ == cur_e else "secondary",
+                     on_click=cb_av_emoji, args=(S, e_))
+    if avatar_pref(S):
+        wide(st.button, ct("av_remove") if avatar_photo(S) else ct("av_default"),
+             key="av_clear", on_click=cb_av_clear, args=(S,))
+
+
 def settings_page(key, opts, choice):
     dash_css()
     st.title(ct("view_settings"))
+    with st.container(border=True):
+        sec(ct("set_g_avatar"))
+        avatar_ui(_uletter())
     with st.container(border=True):
         sec(ct("set_g_lang"))
         lang_picker()
@@ -3236,6 +3625,17 @@ def settings_page(key, opts, choice):
     with st.container(border=True):
         sec(ct("set_g_look"))
         theme_select()
+    with st.container(border=True):
+        sec(ct("set_g_read"))
+        st.caption(ct("set_fs"))
+        fs_cols = st.columns(4)
+        for c_, code_ in zip(fs_cols, ["s", "m", "l", "xl"]):
+            with c_:
+                wide(st.button, ct("fs_" + code_), key=f"fs_{code_}",
+                     type="primary" if st.session_state.get("fs_sel", "m") == code_ else "secondary",
+                     on_click=cb_fs, args=(S, code_))
+        wide(st.button, ("✓ " if st.session_state.get("rd_mode") else "") + ct("rd_mode"), key="rd_btn",
+             type="primary" if st.session_state.get("rd_mode") else "secondary", on_click=cb_rd, args=(S,))
     if AUTH_ON:
         with st.container(border=True):
             sec(t("account"))
@@ -3244,6 +3644,61 @@ def settings_page(key, opts, choice):
         with st.container(border=True):
             sec(ct("set_g_owner"))
             providers_ui()
+        with st.container(border=True):
+            sec(ct("h_title"))
+            health_ui()
+
+
+def save_memory(key, chat_):
+    """Seçilmiş söhbətdən fənn yaddaşını yeniləyir (köhnə yaddaşla birləşdirir)."""
+    convo = "\n".join(f"{m['role']}: {m['content']}" for m in chat_["messages"][-30:])
+    try:
+        raw_out = ask_msgs(
+            "Return ONLY valid JSON with keys: weak_topics (list), common_mistakes (list), "
+            "strengths (list), next_steps (list), last_session_summary (string). Merge the OLD "
+            "memory with this conversation, keep it concise, write values in Azerbaijani.",
+            [{"role": "user", "content": f"OLD:\n{load_mem(key)}\n\nCONVERSATION:\n{convo}"}],
+            free_plan(), 0.0)
+        mt = re.search(r"\{.*\}", raw_out, flags=re.S)
+        try:
+            data = json.loads(mt.group(0)) if mt else {"notes": raw_out}
+        except Exception:
+            data = {"notes": raw_out}
+        S.save_mem(key, data)
+        st.success(t("mem_ok"))
+    except store.SessionExpired:
+        drop_login()
+        st.rerun()
+    except Exception as e:
+        st.error(friendly(e))
+
+
+def memory_page(key):
+    dash_css()
+    st.title(ct("view_memory"))
+    with st.container(border=True):
+        sec(subj_name(key))
+        st.caption(ct("mem_hint", s=subj_name(key)))
+        chats_ = sc(S.list_chats, key, default=[]) or []
+        if not chats_:
+            st.caption(ct("mem_need_chat"))
+        else:
+            ids = [c["id"] for c in chats_]
+            cur = st.session_state.get("cid")
+            pick = st.selectbox(ct("mem_pick"), ids, index=ids.index(cur) if cur in ids else 0,
+                                format_func=lambda i: next((c["title"] for c in chats_ if c["id"] == i), i),
+                                key=f"mem_pick_{key}")
+            if wide(st.button, t("save_mem"), key="mem_save_btn"):
+                full = sc(S.load_chat, key, pick)
+                if full and full.get("messages"):
+                    save_memory(key, full)
+    with st.container(border=True):
+        sec(t("my_mem"))
+        raw_mem = load_mem(key)
+        try:
+            st.json(json.loads(raw_mem))
+        except Exception:
+            st.text(raw_mem)
 
 
 def cb_choice():
@@ -3264,7 +3719,7 @@ if AUTH_ON:
     _warn = " warn" if _used >= 0.8 * _lim else ""
     _uname = re.sub(r"[^a-z0-9_]", "", str(S.username or "").lower()) or "?"
     st.sidebar.markdown(
-        f'<div class="sb-user"><div class="tk-av">{_e(_uname[:1].upper())}</div><div class="tk-grow"><b>@{_e(_uname)}</b>'
+        f'<div class="sb-user">{avatar_html(S, _uname, 38)}<div class="tk-grow"><b>@{_e(_uname)}</b>'
         f'<small>{_e(t("quota"))}: {_used}/{_lim}</small>'
         f'<div class="tk-bar{_warn}"><i style="width:{min(100, round(_used / _lim * 100))}%"></i></div></div></div>',
         unsafe_allow_html=True)
@@ -3272,9 +3727,18 @@ def cb_mode(v):
     st.session_state["mode_sel"] = v
 
 
+if "fs_sel" not in st.session_state:
+    _vp = get_prefs(S).get("view") or {}
+    st.session_state["fs_sel"] = _vp.get("fs") if _vp.get("fs") in FS_PX else "m"
+    st.session_state["rd_mode"] = bool(_vp.get("read"))
+_rc = read_css()
+if _rc:
+    st.sidebar.markdown(_rc, unsafe_allow_html=True)
+
 # bölmələr: 2 sütunlu düymə şəbəkəsi, aktiv olan tema rəngində dolu
-_views = ["chat", "cards", "plan", "stats", "settings"] + (["owner"] if (AUTH_ON and IS_OWNER) else [])
-if st.session_state.get("view") not in _views:
+_views = ["chat", "cards", "plan", "stats"] + (["owner"] if (AUTH_ON and IS_OWNER) else [])
+_foot_views = ["settings", "memory"]  # yan panelin aşağı hissəsində
+if st.session_state.get("view") not in _views + _foot_views:
     st.session_state["view"] = "chat"
 st.sidebar.markdown(f'<div class="sb-label">{_e(ct("view"))}</div>', unsafe_allow_html=True)
 _nav_cols = st.sidebar.columns(2)
@@ -3307,7 +3771,20 @@ verify = bool(st.session_state.get("tg_verify"))
 speak_on = bool(st.session_state.get("tg_speak"))
 voice_in = bool(st.session_state.get("tg_voice"))
 list_box = st.sidebar.container()
+try:
+    foot_box = st.sidebar.container(key="sb_foot")
+except TypeError:  # köhnə Streamlit: açarlı konteyner yoxdur
+    foot_box = st.sidebar.container()
+with foot_box:
+    _fc = st.columns(2)
+    for _c, _v in zip(_fc, _foot_views):
+        with _c:
+            wide(st.button, ct("view_" + _v), key=f"nav_{_v}",
+                 type="primary" if view == _v else "secondary", on_click=cb_view, args=(_v,))
 
+if view == "memory":
+    memory_page(key)
+    st.stop()
 if view == "cards":
     cards_page(S, key)
     st.stop()
@@ -3338,8 +3815,21 @@ st.title(subj_name(key))
 if AUTH_ON and not IS_OWNER and key != "gen":
     st.caption(t("lib_note"))
 
+USER_AV = chat_avatar(S, _uletter())
+
+
+def user_msg():
+    """İstifadəçi mesajı: seçilmiş avatarla (alınmasa standart işarə ilə)."""
+    if USER_AV is not None:
+        try:
+            return st.chat_message("user", avatar=USER_AV)
+        except Exception:
+            pass
+    return st.chat_message("user")
+
+
 for i, m in enumerate(chat["messages"]):
-    with st.chat_message(m["role"]):
+    with (user_msg() if m["role"] == "user" else st.chat_message(m["role"])):
         st.markdown(fix_math(m["content"]))
         if m.get("by"):
             st.caption(f"🤖 {m['by']}")
@@ -3347,7 +3837,7 @@ for i, m in enumerate(chat["messages"]):
             render_sources(m["content"], m["sources"], key, f"{chat['id']}_{i}")
         show_web_sources(m.get("web"))
         if m["role"] == "assistant":
-            b_spk, b_crd, _sp = st.columns([1, 1, 8])
+            b_spk, b_crd, b_up, b_dn, b_dl, _sp = st.columns([1, 1, 1, 1, 1, 6])
             if b_spk.button("🔊", key=f"spk_{chat['id']}_{i}", help=t("read")):
                 d_, e_ = speak(m["content"], key)
                 show_audio(d_, e_, True)
@@ -3358,6 +3848,16 @@ for i, m in enumerate(chat["messages"]):
                     n_added = create_cards(S, key, "", 4, text=m["content"])
                     if n_added is not None:
                         st.toast(ct("c_made", n=n_added) if n_added else ct("c_made0"))
+            _q_prev = chat["messages"][i - 1]["content"] if i > 0 and chat["messages"][i - 1]["role"] == "user" else ""
+            _fb_now = get_fb(S, key, chat["id"]).get(i, 0)
+            b_up.button("👍", key=f"fbu_{chat['id']}_{i}", help=ct("fb_up"),
+                        type="primary" if _fb_now == 1 else "secondary",
+                        on_click=cb_fb, args=(S, key, chat["id"], i, 1, _q_prev, m["content"]))
+            b_dn.button("👎", key=f"fbd_{chat['id']}_{i}", help=ct("fb_down"),
+                        type="primary" if _fb_now == -1 else "secondary",
+                        on_click=cb_fb, args=(S, key, chat["id"], i, -1, _q_prev, m["content"]))
+            b_dl.download_button("⬇️", data=answer_md(_q_prev, m, key), file_name="tutor_cavab.md",
+                                 mime="text/markdown", key=f"dl_{chat['id']}_{i}", help=ct("dl_answer"))
 
 _bottom = getattr(st, "bottom", None) or getattr(st, "_bottom", None)
 if _bottom is not None:
@@ -3435,7 +3935,7 @@ if q:
         else:
             st.warning(t("file_need_gemini"))
             media = []
-    with st.chat_message("user"):
+    with user_msg():
         st.markdown(q)
         for mime_, data_ in media:
             if mime_.startswith("image/"):
@@ -3493,6 +3993,9 @@ if q:
 with list_box:
     st.subheader(t("chats"))
     wide(st.button, t("new_chat"), key="new_chat_btn", on_click=cb_new)
+    if chat["messages"]:
+        wide(st.download_button, ct("dl_chat"), data=chat_md(chat, key), file_name="tutor_soxbet.md",
+             mime="text/markdown", key="dl_chat_btn")
     chat_q = st.text_input("chat_q", key="chat_q", placeholder=t("chat_search"), label_visibility="collapsed",
                            max_chars=80).strip()
     chats = sc(S.list_chats, key, default=[]) or []
@@ -3514,32 +4017,3 @@ with list_box:
             wide(st.button, label, key=f"open_{c['id']}", on_click=cb_open, args=(c["id"],))
         with c2:
             st.button("🗑", key=f"del_{c['id']}", help=t("delete"), on_click=cb_delete, args=(key, c["id"]))
-
-    st.divider()
-    if st.button(t("save_mem")) and chat["messages"]:
-        convo = "\n".join(f"{m['role']}: {m['content']}" for m in chat["messages"][-30:])
-        try:
-            raw_out = ask_msgs(
-                "Return ONLY valid JSON with keys: weak_topics (list), common_mistakes (list), "
-                "strengths (list), next_steps (list), last_session_summary (string). Merge the OLD "
-                "memory with this conversation, keep it concise, write values in Azerbaijani.",
-                [{"role": "user", "content": f"OLD:\n{load_mem(key)}\n\nCONVERSATION:\n{convo}"}],
-                free_plan(), 0.0)
-            mt = re.search(r"\{.*\}", raw_out, flags=re.S)
-            try:
-                data = json.loads(mt.group(0)) if mt else {"notes": raw_out}
-            except Exception:
-                data = {"notes": raw_out}
-            S.save_mem(key, data)
-            st.success(t("mem_ok"))
-        except store.SessionExpired:
-            drop_login()
-            st.rerun()
-        except Exception as e:
-            st.error(friendly(e))
-    with st.expander(t("my_mem")):
-        raw_mem = load_mem(key)
-        try:
-            st.json(json.loads(raw_mem))
-        except Exception:
-            st.text(raw_mem)
