@@ -235,6 +235,23 @@ section.main, .main, [data-testid="stApp"] > div {{ background:transparent !impo
   border-color:var(--tk-accent) !important; box-shadow:{glow} !important;
 }}
 .stApp [data-testid="stDateInput"] svg {{ fill:var(--tk-muted) !important; color:var(--tk-muted) !important; }}
+/* təqvim pəncərəsi (BaseWeb calendar): tema rəngləri, oxunaqlı günlər */
+[data-baseweb="calendar"] {{ background:var(--tk-surface) !important; color:var(--tk-text) !important; border-radius:14px; }}
+[data-baseweb="calendar"] * {{
+  background-color:transparent !important; color:var(--tk-text) !important; -webkit-text-fill-color:var(--tk-text) !important;
+}}
+[data-baseweb="calendar"] [aria-disabled="true"], [data-baseweb="calendar"] [aria-disabled="true"] * {{
+  color:var(--tk-muted) !important; -webkit-text-fill-color:var(--tk-muted) !important; opacity:.5;
+}}
+[data-baseweb="calendar"] [role="gridcell"]:hover:not([aria-disabled="true"]),
+[data-baseweb="calendar"] [role="button"]:hover:not([aria-disabled="true"]) {{
+  background-color:color-mix(in srgb, var(--tk-accent) 20%, transparent) !important; border-radius:10px;
+}}
+[data-baseweb="calendar"] [aria-selected="true"], [data-baseweb="calendar"] [aria-selected="true"] * {{
+  background-color:var(--tk-accent) !important; color:var(--tk-on) !important; -webkit-text-fill-color:var(--tk-on) !important;
+  border-radius:10px;
+}}
+[data-baseweb="calendar"] svg {{ fill:var(--tk-text) !important; color:var(--tk-text) !important; }}
 
 /* açılan siyahı: BaseWeb olmasa da role="listbox" ilə tapılır */
 [role="listbox"], [data-testid="stSelectboxVirtualDropdown"],

@@ -406,6 +406,18 @@ def tgl(label, key, help=None, default=False):
     return bool(st.session_state[key])
 
 
+def cb_pick(key, value):
+    st.session_state[key] = value
+
+
+def pick_buttons(opts, key):
+    """Cavab variantları: radio əvəzinə tam enli düymələr (seçilən dolu tema rənginə boyanır)."""
+    cur = st.session_state.get(key)
+    for j, o in enumerate(opts):
+        wide(st.button, f"{'ABCD'[j]}) {o}", key=f"{key}_b{j}",
+             type="primary" if cur == o else "secondary", on_click=cb_pick, args=(key, o))
+
+
 def read_json(path, default):
     try:
         with open(path, encoding="utf-8") as f:
@@ -2212,8 +2224,7 @@ def quiz_ui(S_, key, cnt):
         st.markdown(fix_math(it["card"]["front"]))
     letters = "ABCD"
     if q["checked"] is None:
-        st.radio(ct("q_pick"), it["opts"], index=None, key=f"qz_opt_{q['run']}_{i}",
-                 format_func=lambda o: f"{letters[it['opts'].index(o)]}) {o}", label_visibility="collapsed")
+        pick_buttons(it["opts"], f"qz_opt_{q['run']}_{i}")
         st.button(ct("q_check"), key=f"qz_chk_{i}", type="primary", on_click=cb_qz_check, args=(S_, key))
         return
     for j, o in enumerate(it["opts"]):
@@ -2353,8 +2364,7 @@ def exam_ui(S_, key, cnt):
     for i, it in enumerate(ex["items"]):
         with st.container(border=True):
             st.markdown(f"**{i + 1}.** " + fix_math(it["card"]["front"]))
-            st.radio(ct("q_pick"), it["opts"], index=None, key=f"ex_{ex['run']}_{i}",
-                     format_func=lambda o, it=it: f"{letters[it['opts'].index(o)]}) {o}", label_visibility="collapsed")
+            pick_buttons(it["opts"], f"ex_{ex['run']}_{i}")
     st.button(ct("e_finish"), key="ex_fin", type="primary", on_click=cb_ex_finish, args=(S_, key))
 
 
@@ -2364,8 +2374,14 @@ def _pal():
 
 def range_select(key):
     """Zaman aralığı: 1, 7, 28 gün və ya bütün zaman (0)."""
-    return st.radio("range", [1, 7, 28, 0], index=1, key=key, horizontal=True,
-                    format_func=lambda d: ct(f"r{d}"), label_visibility="collapsed")
+    if key not in st.session_state:
+        st.session_state[key] = 7
+    cols = st.columns(4)
+    for c_, d_ in zip(cols, [1, 7, 28, 0]):
+        with c_:
+            wide(st.button, ct(f"r{d_}"), key=f"{key}_b{d_}",
+                 type="primary" if st.session_state[key] == d_ else "secondary", on_click=cb_pick, args=(key, d_))
+    return st.session_state[key]
 
 
 def range_start(sel, today):
