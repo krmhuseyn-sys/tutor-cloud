@@ -1755,7 +1755,9 @@ CT = {
         "mm_make": "Xülasə və xəritə yarat", "mm_spin": "Xülasə və xəritə hazırlanır...",
         "mm_summary": "Qısa xülasə", "mm_map": "Fikir xəritəsi", "mm_terms": "Əsas terminlər",
         "mm_cards": "🃏 Terminlərdən kart yarat",
-        "sb_settings": "⚙️ Ayarlar",
+        "sb_settings": "⚙️ Ayarlar", "view_settings": "⚙️ Ayarlar",
+        "set_g_answer": "Cavab seçimləri", "set_g_voice": "Səs", "set_g_look": "Görünüş",
+        "set_g_owner": "Sahib üçün: provayderlər",
         "d_c_m": "{m}/{t} öyrənilib", "d_c_d": "{d} bu gün təkrar", "d_c_c": "{c} söhbət",
         "g_label": "🎯 Gündəlik hədəf", "g_off": "Söndürülü", "g_n": "{n} təkrar",
         "g_prog": "Bu gün: {n}/{g} təkrar", "g_done": "🎯 Gündəlik hədəf tamamlandı. Əla!",
@@ -1833,7 +1835,9 @@ CT = {
         "mm_make": "Create summary and map", "mm_spin": "Preparing the summary and map...",
         "mm_summary": "Quick summary", "mm_map": "Mind map", "mm_terms": "Key terms",
         "mm_cards": "🃏 Create cards from terms",
-        "sb_settings": "⚙️ Settings",
+        "sb_settings": "⚙️ Settings", "view_settings": "⚙️ Settings",
+        "set_g_answer": "Answer options", "set_g_voice": "Voice", "set_g_look": "Appearance",
+        "set_g_owner": "Owner: providers",
         "d_c_m": "{m}/{t} mastered", "d_c_d": "{d} due today", "d_c_c": "{c} chats",
         "g_label": "🎯 Daily goal", "g_off": "Off", "g_n": "{n} reviews",
         "g_prog": "Today: {n}/{g} reviews", "g_done": "🎯 Daily goal reached. Great job!",
@@ -3105,6 +3109,105 @@ SB_CSS = """<style>
 </style>"""
 
 
+def account_ui():
+    about_new = st.text_area(t("about"), value=ABOUT, max_chars=600, key="about_box")
+    if st.button(t("about_save")):
+        try:
+            S.set_about(about_new)
+            (st.session_state.get("profile") or {})["about"] = about_new[:600]
+            st.success(t("about_ok"))
+        except store.SessionExpired:
+            drop_login()
+            st.rerun()
+        except Exception as e:
+            st.error(friendly(e))
+    st.markdown("**" + t("export_title") + "**")
+    st.caption(t("export_hint"))
+    if st.button(t("export_prep"), key="exp_btn"):
+        try:
+            dump = {"email": S.email, "profile": st.session_state.get("profile") or {}, "memory": {}, "chats": {}}
+            for k_ in SUBJ_KEYS:
+                dump["memory"][k_] = S.load_mem(k_)
+                items_ = []
+                for c_ in (S.list_chats(k_) or []):
+                    full_ = S.load_chat(k_, c_["id"])
+                    if full_:
+                        items_.append(full_)
+                dump["chats"][k_] = items_
+            st.session_state["export_blob"] = json.dumps(dump, ensure_ascii=False, indent=2, default=str)
+        except store.SessionExpired:
+            drop_login()
+            st.rerun()
+        except Exception as e:
+            st.error(friendly(e))
+    if st.session_state.get("export_blob"):
+        st.download_button(t("export_dl"), st.session_state["export_blob"], file_name="tutor_data.json",
+                           mime="application/json", key="exp_dl")
+    st.caption(t("privacy"))
+    st.button(t("logout"), on_click=do_logout, key="logout_btn")
+    st.divider()
+    st.caption(t("delete_acc"))
+    confirm = st.text_input(t("delete_confirm"), key="del_confirm")
+    if st.button(t("delete_btn"), key="del_acc_btn") and confirm.strip().lower() == (S.username or "x"):
+        try:
+            S.delete_account()
+            do_logout()
+            st.rerun()
+        except store.SessionExpired:
+            drop_login()
+            st.rerun()
+        except Exception as e:
+            st.error(friendly(e))
+
+
+def providers_ui():
+    u_now = _usage()
+    for pid, cfg in PROVIDERS.items():
+        if not os.getenv(cfg["env"]):
+            st.caption(f"❌ {cfg['label']} ({t('key_missing')}: {cfg['env']})")
+        elif not available(pid):
+            st.caption(f"⚠️ {cfg['label']} ({t('pkg_missing')})")
+        else:
+            cap = daily_cap(pid)
+            extra = f" ({u_now.get(pid, 0)}/{cap})" if cap is not None else ""
+            st.caption(f"✅ {provider_label(pid)} → {resolve_model(pid)}{extra}")
+    u = _usage()
+    st.caption(t("usage") + ": " + ", ".join(f"{k} {v}" for k, v in u.items() if k != "date"))
+
+
+def settings_page(key, opts, choice):
+    dash_css()
+    st.title(ct("view_settings"))
+    with st.container(border=True):
+        sec(ct("set_g_answer"))
+        st.selectbox(t("provider"), opts, index=opts.index(choice), key="w_choice", on_change=cb_choice,
+                     format_func=lambda k: t("p_smart") if k == "smart" else provider_label(k))
+        tgl(t("web"), "tg_web")
+        tgl(t("verify"), "tg_verify")
+    with st.container(border=True):
+        sec(ct("set_g_voice"))
+        tgl(t("speak"), "tg_speak")
+        tgl(t("voice"), "tg_voice")
+        if wide(st.button, t("voice_test")):
+            d_, e_ = speak(t("voice_test_text"), key)
+            show_audio(d_, e_, True)
+    with st.container(border=True):
+        sec(ct("set_g_look"))
+        theme_select()
+    if AUTH_ON:
+        with st.container(border=True):
+            sec(t("account"))
+            account_ui()
+    if IS_OWNER:
+        with st.container(border=True):
+            sec(ct("set_g_owner"))
+            providers_ui()
+
+
+def cb_choice():
+    st.session_state["set_choice"] = st.session_state.get("w_choice", "smart")
+
+
 def cb_view(v):
     st.session_state["view"] = v
 
@@ -3139,7 +3242,7 @@ for _c, (_code, _name) in zip(_lang_cols, [("az", "Azərbaycanca"), ("en", "Engl
              type="primary" if st.session_state.get("ui") == _code else "secondary", on_click=cb_ui, args=(_code,))
 
 # bölmələr: 2 sütunlu düymə şəbəkəsi, aktiv olan tema rəngində dolu
-_views = ["chat", "cards", "plan", "stats"] + (["owner"] if (AUTH_ON and IS_OWNER) else [])
+_views = ["chat", "cards", "plan", "stats", "settings"] + (["owner"] if (AUTH_ON and IS_OWNER) else [])
 if st.session_state.get("view") not in _views:
     st.session_state["view"] = "chat"
 st.sidebar.markdown(f'<div class="sb-label">{_e(ct("view"))}</div>', unsafe_allow_html=True)
@@ -3163,17 +3266,15 @@ for _n, _m in enumerate(_MODES):
 mode = st.session_state["mode_sel"]
 
 avail_ids = [p for p in PROVIDERS if available(p) and (IS_OWNER or PROVIDERS[p]["free"])]
-with st.sidebar.expander(ct("sb_settings")):
-    choice = st.selectbox(
-        t("provider"), ["smart"] + avail_ids,
-        format_func=lambda k: t("p_smart") if k == "smart" else provider_label(k))
-    web_on = tgl(t("web"), "tg_web")
-    verify = tgl(t("verify"), "tg_verify")
-    speak_on = tgl(t("speak"), "tg_speak")
-    voice_in = tgl(t("voice"), "tg_voice")
-    if wide(st.button, t("voice_test")):
-        d_, e_ = speak(t("voice_test_text"), key)
-        show_audio(d_, e_, True, st.sidebar)
+_opts = ["smart"] + avail_ids
+choice = st.session_state.get("set_choice", "smart")
+if choice not in _opts:
+    choice = "smart"
+# parametrlər Ayarlar səhifəsində dəyişir, burada yalnız oxunur
+web_on = bool(st.session_state.get("tg_web"))
+verify = bool(st.session_state.get("tg_verify"))
+speak_on = bool(st.session_state.get("tg_speak"))
+voice_in = bool(st.session_state.get("tg_voice"))
 list_box = st.sidebar.container()
 
 if view == "cards":
@@ -3187,6 +3288,9 @@ if view == "stats":
     st.stop()
 if view == "owner" and AUTH_ON and IS_OWNER:
     owner_page(S)
+    st.stop()
+if view == "settings":
+    settings_page(key, _opts, choice)
     st.stop()
 
 # ======================= TUTOR SƏHİFƏSİ =======================
@@ -3408,77 +3512,3 @@ with list_box:
             st.json(json.loads(raw_mem))
         except Exception:
             st.text(raw_mem)
-
-# ======================= HESAB (yalnız giriş sistemi aktivdirsə) =======================
-if AUTH_ON:
-    with st.sidebar.expander(t("account")):
-        about_new = st.text_area(t("about"), value=ABOUT, max_chars=600, key="about_box")
-        if st.button(t("about_save")):
-            try:
-                S.set_about(about_new)
-                (st.session_state.get("profile") or {})["about"] = about_new[:600]
-                st.success(t("about_ok"))
-            except store.SessionExpired:
-                drop_login()
-                st.rerun()
-            except Exception as e:
-                st.error(friendly(e))
-        theme_select()
-        st.markdown("**" + t("export_title") + "**")
-        st.caption(t("export_hint"))
-        if st.button(t("export_prep"), key="exp_btn"):
-            try:
-                dump = {"email": S.email, "profile": st.session_state.get("profile") or {}, "memory": {}, "chats": {}}
-                for k_ in SUBJ_KEYS:
-                    dump["memory"][k_] = S.load_mem(k_)
-                    items_ = []
-                    for c_ in (S.list_chats(k_) or []):
-                        full_ = S.load_chat(k_, c_["id"])
-                        if full_:
-                            items_.append(full_)
-                    dump["chats"][k_] = items_
-                st.session_state["export_blob"] = json.dumps(dump, ensure_ascii=False, indent=2, default=str)
-            except store.SessionExpired:
-                drop_login()
-                st.rerun()
-            except Exception as e:
-                st.error(friendly(e))
-        if st.session_state.get("export_blob"):
-            st.download_button(t("export_dl"), st.session_state["export_blob"], file_name="tutor_data.json",
-                               mime="application/json", key="exp_dl")
-        st.caption(t("privacy"))
-        st.button(t("logout"), on_click=do_logout, key="logout_btn")
-        st.divider()
-        st.caption(t("delete_acc"))
-        confirm = st.text_input(t("delete_confirm"), key="del_confirm")
-        if st.button(t("delete_btn"), key="del_acc_btn") and confirm.strip().lower() == (S.username or "x"):
-            try:
-                S.delete_account()
-                do_logout()
-                st.rerun()
-            except store.SessionExpired:
-                drop_login()
-                st.rerun()
-            except Exception as e:
-                st.error(friendly(e))
-
-if not AUTH_ON:
-    with st.sidebar.expander(t("theme_title")):
-        theme_select()
-
-# ======================= YAN PANELİN ALTI (yalnız sahib üçün) =======================
-st.sidebar.divider()
-if IS_OWNER:
-    with st.sidebar.expander(t("providers")):
-        u_now = _usage()
-        for pid, cfg in PROVIDERS.items():
-            if not os.getenv(cfg["env"]):
-                st.caption(f"❌ {cfg['label']} ({t('key_missing')}: {cfg['env']})")
-            elif not available(pid):
-                st.caption(f"⚠️ {cfg['label']} ({t('pkg_missing')})")
-            else:
-                cap = daily_cap(pid)
-                extra = f" ({u_now.get(pid, 0)}/{cap})" if cap is not None else ""
-                st.caption(f"✅ {provider_label(pid)} → {resolve_model(pid)}{extra}")
-    u = _usage()
-    st.sidebar.caption(t("usage") + ": " + ", ".join(f"{k} {v}" for k, v in u.items() if k != "date"))
