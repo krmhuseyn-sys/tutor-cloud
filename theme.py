@@ -302,6 +302,18 @@ div:has(> [role="listbox"]), div:has(> div > [role="listbox"]) {{
 [data-testid="stAlert"] {{ border-radius:var(--tk-radius) !important; }}
 .stApp [data-testid="stRadio"] [role="radiogroup"] label {{ transition:transform .15s ease; }}
 .stApp [data-testid="stRadio"] [role="radiogroup"] label:hover {{ transform:translateX(2px); }}
+/* radio dairələri: seçilməyən = boş halqa, seçilən = tema rəngində dolu + içində nöqtə */
+.stApp [data-testid="stRadio"] label > div:first-of-type {{
+  background:transparent !important; background-color:transparent !important;
+  border:2px solid var(--tk-muted) !important; border-radius:50% !important; box-sizing:border-box !important;
+}}
+.stApp [data-testid="stRadio"] label:has(input:checked) > div:first-of-type {{
+  background:var(--tk-accent) !important; background-color:var(--tk-accent) !important; border-color:var(--tk-accent) !important;
+}}
+.stApp [data-testid="stRadio"] label:has(input:checked) > div:first-of-type > div {{
+  background:var(--tk-on) !important; background-color:var(--tk-on) !important;
+}}
+.stApp [data-testid="stRadio"] label:hover > div:first-of-type {{ border-color:var(--tk-accent) !important; }}
 
 /* ---------- giriş / açılış səhifəsi ---------- */
 .tk-hero {{ text-align:center; padding:28px 0 10px; animation:tk-rise .6s cubic-bezier(.2,.7,.2,1) both; }}
