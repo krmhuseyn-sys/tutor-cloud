@@ -496,6 +496,21 @@ div:has(> [role="listbox"]), div:has(> div > [role="listbox"]) {{
 [data-testid="stPopoverBody"] div[data-baseweb="input"] *, [data-testid="stPopoverBody"] div[data-baseweb="select"] * {{
   background:transparent !important; color:var(--tk-text) !important;
 }}
+/* Popover içindəki bütün yazı sahələri (ağ qalmasın): geniş seçicilər */
+[data-testid="stPopoverBody"] [data-baseweb="input"], [data-testid="stPopoverBody"] [data-baseweb="base-input"],
+[data-testid="stPopoverBody"] [data-baseweb="textarea"], [data-testid="stPopoverBody"] [data-testid="stTextInputRootElement"],
+[data-testid="stPopoverBody"] [data-testid="stTextAreaRootElement"], [data-testid="stPopoverBody"] [data-testid="stSelectbox"] > div > div {{
+  background:var(--tk-surface) !important; background-color:var(--tk-surface) !important; color:var(--tk-text) !important;
+}}
+[data-testid="stPopoverBody"] input, [data-testid="stPopoverBody"] textarea {{
+  background:transparent !important; background-color:transparent !important; color:var(--tk-text) !important;
+  -webkit-text-fill-color:var(--tk-text) !important; caret-color:var(--tk-accent);
+}}
+[data-testid="stPopoverBody"] input::placeholder {{ color:var(--tk-muted) !important; -webkit-text-fill-color:var(--tk-muted) !important; }}
+[data-testid="stPopoverBody"] [data-testid="stTextInputRootElement"], [data-testid="stPopoverBody"] [data-baseweb="input"] {{
+  border:2px solid var(--tk-line) !important; border-radius:12px !important;
+}}
+[data-testid="stPopoverBody"] [data-baseweb="base-input"] {{ border:0 !important; }}
 [data-testid="stFileUploaderDropzone"] {{
   background:var(--tk-surface2) !important; border:2px dashed var(--tk-line) !important; border-radius:14px !important;
 }}
