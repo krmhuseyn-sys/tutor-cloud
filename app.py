@@ -145,7 +145,7 @@ TXT = {
         "lib_note": "Bu hesabda kitab materialları bağlıdır. Tutor profil və ümumi biliklə cavab verir.",
         "privacy": ("Məxfilik: söhbətlərin hesabında saxlanır, digər istifadəçilər görmür. Layihə sahibi texniki olaraq "
                     "verilənlər bazasına çıxışa malikdir. Sorğular Google (Gemini) və ya Groq-a göndərilir; pulsuz "
-                    "səviyyədə provayderlər məlumatı məhsulu yaxşılaşdırmaq üçün istifadə edə bilər. Həssas məlumat yazma. 👍/👎 verdikdə sualın və cavabın qısa hissəsi də saxlanılır."),
+                    "səviyyədə provayderlər məlumatı məhsulu yaxşılaşdırmaq üçün istifadə edə bilər. Həssas məlumat yazma. rəy verdikdə sualın və cavabın qısa hissəsi də saxlanılır."),
         "save_err": "Söhbət saxlanmadı. Bir az sonra yenidən cəhd et.",
     },
     "en": {
@@ -236,10 +236,36 @@ TXT = {
         "lib_note": "Course book materials are not available on this account. The tutor answers from its profile and general knowledge.",
         "privacy": ("Privacy: your chats are stored in your account and other users cannot see them. The project owner "
                     "technically has access to the database. Requests are sent to Google (Gemini) or Groq; on free tiers "
-                    "providers may use data to improve their products. Do not write sensitive information. When you vote 👍/👎, a short part of the question and answer is stored too."),
+                    "providers may use data to improve their products. Do not write sensitive information. When you vote, a short part of the question and answer is stored too."),
         "save_err": "The chat could not be saved. Try again in a moment.",
     },
 }
+
+# Emoji (rəngli şəkil simvolları) tətbiqin mətnlərindən silinir. ✓ ✕ ● ← → ★ ☆ kimi mətn işarələri qalır.
+_EMO = re.compile("[\U0001F000-\U0001FAFF\u26a0\u2699\u26a1\u2705\u2728\u274c\u2753\u2754\u2795\u2796\u2b50"
+                  "\u23ed\u23f1\u23f3\u25b6\u2b07\u2b06\u21a9\u2764\u2702\u270f\u23f0\u231b\u2139\u2b05\u27a1"
+                  "\ufe0f\u200d\u20e3]")
+
+
+def noemo(v):
+    """Mətndən emoji silir (içində emoji yoxdursa, olduğu kimi qaytarır). Siyahı və lüğətlərdə dərindən işləyir."""
+    if isinstance(v, str):
+        if not _EMO.search(v):
+            return v.replace("\u2714", "\u2713")
+        o = _EMO.sub("", v).replace("\u2714", "\u2713")
+        o = re.sub(r"\(\s*\)|\[\s*\]", "", o)
+        o = re.sub(r"\s*/\s*(?=[,.;:)]|$)", "", o)
+        o = re.sub(r"^[\s/·|,.\-–:]+", "", o)
+        o = re.sub(r"(?<=\S)[ \t]{2,}", " ", o)
+        return o.strip() + (" " if v.endswith(" ") and o.strip() else "")
+    if isinstance(v, dict):
+        return {k: noemo(x) for k, x in v.items()}
+    if isinstance(v, list):
+        return [noemo(x) for x in v]
+    if isinstance(v, tuple):
+        return tuple(noemo(x) for x in v)
+    return v
+
 
 try:
     import lang_ru
@@ -248,6 +274,8 @@ except ImportError:  # fayl yoxdursa rus dili sadəcə görünmür
 if lang_ru:
     TXT["ru"] = {**TXT["en"], **lang_ru.TXT}
     SUBJ["ru"] = lang_ru.SUBJ
+TXT = noemo(TXT)
+SUBJ = noemo(SUBJ)
 
 MODES = {
     "learn": "",
@@ -331,7 +359,7 @@ client = get_client()
 db = get_db()
 USAGE = "usage.json"
 
-st.set_page_config(page_title="Tutor Komandam", page_icon="🎓", layout="wide")
+st.set_page_config(page_title="Tutor Komandam", layout="wide")
 st.session_state.setdefault("ui", st.session_state.get("ui_keep", "az"))
 st.session_state["ui_keep"] = st.session_state["ui"]  # giriş səhifəsindəki radio yox olsa da dil qalsın
 st.session_state.setdefault("cid", None)
@@ -378,7 +406,7 @@ inject_theme()
 # ---- PIN qoruması (APP_PIN təyin olunubsa; təyin olunmayıbsa yerli işləmədə heç nə soruşmur) ----
 _PIN = os.getenv("APP_PIN", "")
 if _PIN and not AUTH_ON and not st.session_state.get("authed"):
-    st.title("🔒 Tutor Komandam")
+    st.title("Tutor Komandam")
     _tries = st.session_state.get("pin_tries", 0)
     if _tries >= 5:
         st.error("Çox səhv cəhd. Səhifəni bağlayıb sonra yenidən cəhd et.")
@@ -764,7 +792,7 @@ def used_label(used):
     pid = used.replace("+web", "")
     if pid not in PROVIDERS:
         return used
-    extra = " + 🔎" if used.endswith("+web") else ""
+    extra = " + web" if used.endswith("+web") else ""
     return f"{PROVIDERS[pid]['label']} · {resolve_model(pid)}{extra}"
 
 
@@ -859,7 +887,7 @@ def show_sources(srcs, subj, uid):
     for j, ((src, page), items_) in enumerate(groups.items()):
         texts = [x.get("text", "") for x in items_]
         is_note = any(x.get("note") for x in items_)
-        st.caption(f"📝 **{src}**, {ct('notes_part')} {page}" if is_note else f"**{src}**, {t('page_word')} {page}")
+        st.caption(f"**{src}**, {ct('notes_part')} {page}" if is_note else f"**{src}**, {t('page_word')} {page}")
         seen_t = set()
         for tx in texts:
             tx = re.sub(r"[ \t]+", " ", tx or "").strip()
@@ -1077,8 +1105,8 @@ def notes_ui():
         st.caption(ct("notes_none"))
     for i_, fl_ in enumerate(files):
         a_, b_ = st.columns([5, 1])
-        a_.caption(f"📝 {fl_['name']} · {fl_['chunks']}")
-        b_.button("🗑", key=f"nd_{subj}_{i_}", help=t("delete"), on_click=cb_note_del, args=(subj, fl_["name"]))
+        a_.caption(f"{fl_['name']} · {fl_['chunks']}")
+        b_.button("×", key=f"nd_{subj}_{i_}", help=t("delete"), on_click=cb_note_del, args=(subj, fl_["name"]))
 
 
 # ======================= PROFİL VƏ YADDAŞ =======================
@@ -1255,6 +1283,7 @@ SUGG = {
 
 if lang_ru:
     SUGG["ru"] = {**SUGG["en"], **{k: v for k, v in lang_ru.SUGG.items()}}
+SUGG = noemo(SUGG)
 
 
 def cb_sugg(text):
@@ -2087,7 +2116,7 @@ def attach_menu():
                 added = _att_add("kamera.png" if data[:4] == b"\x89PNG" else "kamera.jpg", data) or added
         for i, a in enumerate(ss.att_list):
             c1, c2 = st.columns([6, 1])
-            c1.caption("📎 " + a["name"])
+            c1.caption(a["name"])
             c2.button("✕", key=f"att_rm_{i}", on_click=_att_rm, args=(i,))
         if ss.get("att_full"):
             st.caption(t("file_many"))
@@ -2339,6 +2368,8 @@ import extras_txt  # yeni funksiyaların mətnləri (az/en/ru)
 for _l in CT:
     CT[_l].update(extras_txt.get(_l))
     TXT[_l].update(extras_txt.get(_l))
+CT = noemo(CT)
+TXT = noemo(TXT)
 
 
 def ct(k, **kw):
@@ -2614,7 +2645,7 @@ def weak_map_ui(S_, key):
                for n, g in enumerate(top, 1)])
     cols = st.columns(len(top) + 1)
     for n_, g in enumerate(top):
-        cols[n_].button(f"▶ {n_ + 1}", key=f"wk_{n_}", help=g["label"] or ct("w_other"),
+        cols[n_].button(f"{n_ + 1}", key=f"wk_{n_}", help=g["label"] or ct("w_other"),
                         on_click=cb_qz_weak, args=(S_, key, n_))
     cols[len(top)].button(ct("w_all"), key="wk_all", type="primary", on_click=cb_qz_weak, args=(S_, key, -1))
 
@@ -2758,7 +2789,7 @@ def exam_timer(S_, key):
         st.rerun()
         return
     mm, ss = divmod(left, 60)
-    st.markdown(f'<div class="tk-sec">⏱ {mm:02d}:{ss:02d}</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="tk-sec">{mm:02d}:{ss:02d}</div>', unsafe_allow_html=True)
     themed_progress(left / max(ex["limit"], 1), ct("e_left"))
 
 
@@ -2768,10 +2799,10 @@ def exam_result_ui(ex):
     if ex.get("timed_out"):
         st.warning(ct("e_time_up"))
     stat_cards([
-        ("🎯", f"{ex['score']}/{n}", ct("e_score"), {"hero": True}),
-        ("📊", f"{pct}%", ct("e_pct")),
-        ("⏱", f"{ex['used'] // 60:02d}:{ex['used'] % 60:02d}", ct("e_used")),
-        ("⏭", sum(1 for r in ex["res"] if r["pick"] is None), ct("e_skipped")),
+        ("", f"{ex['score']}/{n}", ct("e_score"), {"hero": True}),
+        ("", f"{pct}%", ct("e_pct")),
+        ("", f"{ex['used'] // 60:02d}:{ex['used'] % 60:02d}", ct("e_used")),
+        ("", sum(1 for r in ex["res"] if r["pick"] is None), ct("e_skipped")),
     ])
     (st.success if pct >= 85 else st.info if pct >= 60 else st.warning)(
         ct("e_grade_a") if pct >= 85 else ct("e_grade_b") if pct >= 60 else ct("e_grade_c"))
@@ -2788,7 +2819,7 @@ def exam_result_ui(ex):
     sec(ct("e_review"))
     letters = "ABCD"
     for i, r in enumerate(ex["res"], 1):
-        icon = "⏭" if r["pick"] is None else ("✅" if r["ok"] else "❌")
+        icon = "–" if r["pick"] is None else ("✓" if r["ok"] else "✕")
         with st.expander(f"{icon} {i}. {(r['card']['front'] or '')[:90]}"):
             st.markdown(fix_math(r["card"]["front"]))
             for j, o in enumerate(r["opts"]):
@@ -2965,16 +2996,16 @@ DASH_CSS = """<style>
 .tk-sec{display:flex;align-items:center;gap:10px;margin:22px 0 10px;font-family:var(--tk-head);font-weight:600;font-size:1.12rem;color:var(--tk-text)}
 .tk-sec::before{content:"";width:6px;height:22px;border-radius:4px;background:linear-gradient(180deg,var(--tk-accent),var(--tk-accent2))}
 .tk-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:10px 0 6px}
-.tk-stat{position:relative;overflow:hidden;background:var(--tk-surface);border:1px solid var(--tk-border);border-radius:18px;padding:16px 16px 14px;box-shadow:var(--tk-shadow);transition:transform .18s ease,border-color .18s ease}
-.tk-stat:hover{transform:translateY(-2px);border-color:var(--tk-accent)}
-.tk-stat::before{content:"";position:absolute;left:0;top:0;right:0;height:4px;background:linear-gradient(90deg,var(--tk-accent),var(--tk-accent2))}
+.tk-stat{position:relative;overflow:hidden;background:var(--tk-surface);border:1px solid var(--tk-border);border-radius:20px;padding:18px 18px 16px;box-shadow:none;transition:transform .2s ease,border-color .2s ease,box-shadow .2s ease}
+.tk-stat:hover{transform:translateY(-2px);border-color:var(--tk-accent);box-shadow:var(--tk-soft)}
+.tk-stat::before{content:"";position:absolute;left:18px;top:0;width:34px;height:3px;border-radius:0 0 4px 4px;background:linear-gradient(90deg,var(--tk-accent),var(--tk-accent2))}
 .tk-stat .i{position:absolute;right:12px;top:14px;font-size:1.35rem;opacity:.9}
 .tk-stat .v{font-family:var(--tk-head);font-size:2.1rem;font-weight:700;line-height:1.1;color:var(--tk-text);margin-top:4px}
 .tk-stat .l{font-size:.82rem;color:var(--tk-muted);margin-top:6px;line-height:1.25}
 .tk-stat.hero{background:linear-gradient(135deg,var(--tk-accent),color-mix(in srgb,var(--tk-accent) 62%,var(--tk-accent2)));border-color:transparent}
 .tk-stat.hero::before{display:none}
 .tk-stat.hero .v,.tk-stat.hero .l{color:var(--tk-on)}
-.tk-panel{background:var(--tk-surface);border:1px solid var(--tk-border);border-radius:18px;padding:6px 18px;box-shadow:var(--tk-shadow)}
+.tk-panel{background:var(--tk-surface);border:1px solid var(--tk-border);border-radius:20px;padding:6px 20px;box-shadow:none}
 .tk-item{padding:12px 0;border-top:1px solid var(--tk-border)}
 .tk-item:first-child{border-top:0}
 .tk-item-h{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;color:var(--tk-text)}
@@ -3053,7 +3084,7 @@ def user_rows(users):
             f'<div class="tk-grow"><b>@{_e(uname)}</b><small>{_e(ct("o_h_last"))}: {_e(u.get("last_day") or "-")}</small></div>'
             f'<div class="tk-side"><div class="tk-num">{_e(u.get("range", 0))} <small>{_e(ct("o_h_range").lower())}</small></div>'
             f'<div class="tk-bar{" warn" if warn else ""}"><i style="width:{pct}%"></i></div>'
-            f'<small>{_e(ct("o_h_today"))}: {today_n}/{lim}{" ⚠️" if warn else ""}</small></div></div>')
+            f'<small>{_e(ct("o_h_today"))}: {today_n}/{lim}{" !" if warn else ""}</small></div></div>')
     st.markdown('<div class="tk-panel">' + "".join(out) + "</div>", unsafe_allow_html=True)
 
 
@@ -3103,12 +3134,12 @@ def dashboard_page(S_):
     mastered = sum(1 for r in rows if int(r.get("interval_days") or 0) >= 21)
     goal_bar(S_, (act.get(today) or {}).get("reviews", 0))
     stat_cards([
-        ("🔥", store.streak(act, today), ct("d_streak"), {"hero": True}),
-        ("📚", due_all, ct("d_due")),
-        ("🏆", mastered, ct("d_mastered"), {"tip": ct("d_mastered_help")}),
-        ("🔁", rev_r, ct("d_rev_r")),
-        ("💬", q_r, ct("d_q_r")),
-        ("📅", days_r, ct("d_days_r")),
+        ("", store.streak(act, today), ct("d_streak"), {"hero": True}),
+        ("", due_all, ct("d_due")),
+        ("", mastered, ct("d_mastered"), {"tip": ct("d_mastered_help")}),
+        ("", rev_r, ct("d_rev_r")),
+        ("", q_r, ct("d_q_r")),
+        ("", days_r, ct("d_days_r")),
     ])
 
     with st.container(border=True):
@@ -3175,15 +3206,15 @@ def owner_page(S_):
     qn = data.get("questions", 0)
     au = data.get("active_users", 0)
     stat_cards([
-        ("👥", data.get("users_total", 0), ct("o_users"), {"hero": True}),
-        ("✨", data.get("users_new", 0), ct("o_new")),
-        ("🟢", au, ct("o_active")),
-        ("❓", qn, ct("o_q")),
-        ("📈", f"{qn / au:.1f}" if au else "-", ct("o_per_user")),
-        ("📅", (daily.get(today) or {}).get("questions", 0), ct("o_today_q")),
-        ("🃏", data.get("cards_new", 0), ct("o_cards_new"), {"tip": f"{ct('o_cards')}: {data.get('cards', 0)}"}),
-        ("🔁", data.get("reviews", 0), ct("o_rev")),
-        ("💬", data.get("chats", 0), ct("o_chats_r")),
+        ("", data.get("users_total", 0), ct("o_users"), {"hero": True}),
+        ("", data.get("users_new", 0), ct("o_new")),
+        ("", au, ct("o_active")),
+        ("", qn, ct("o_q")),
+        ("", f"{qn / au:.1f}" if au else "-", ct("o_per_user")),
+        ("", (daily.get(today) or {}).get("questions", 0), ct("o_today_q")),
+        ("", data.get("cards_new", 0), ct("o_cards_new"), {"tip": f"{ct('o_cards')}: {data.get('cards', 0)}"}),
+        ("", data.get("reviews", 0), ct("o_rev")),
+        ("", data.get("chats", 0), ct("o_chats_r")),
     ])
 
     weekly = sel == 0
@@ -3479,10 +3510,10 @@ def plan_ui(S_, key):
     cnt = sc(S_.card_counts, key, default={"total": 0, "due": 0}) or {"total": 0, "due": 0}
     today_row = days[0] if days else {"topics": [], "kind": "study"}
     stat_cards([
-        ("⏳", sched["days_left"], ct("pl_days_left"), {"hero": True}),
-        ("✅", f"{len(plan['done'])}/{len(plan['topics'])}", ct("pl_done_n")),
-        ("📖", len(today_row["topics"]), ct("pl_today_n")),
-        ("📚", cnt["due"], ct("d_due")),
+        ("", sched["days_left"], ct("pl_days_left"), {"hero": True}),
+        ("", f"{len(plan['done'])}/{len(plan['topics'])}", ct("pl_done_n")),
+        ("", len(today_row["topics"]), ct("pl_today_n")),
+        ("", cnt["due"], ct("d_due")),
     ])
     themed_progress(len(plan["done"]) / max(len(plan["topics"]), 1), ct("pl_prog"))
 
@@ -3526,8 +3557,8 @@ def plan_ui(S_, key):
         with st.expander(ct("pl_done_list")):
             for i, tp in enumerate(plan["done"]):
                 c1, c2 = st.columns([5, 1])
-                c1.markdown(f"✅ {tp}")
-                c2.button("↩", key=f"pl_u_{key}_{i}", help=ct("pl_undo"), on_click=cb_pl_done, args=(S_, key, tp, True))
+                c1.markdown(f"✓ {tp}")
+                c2.button("↶", key=f"pl_u_{key}_{i}", help=ct("pl_undo"), on_click=cb_pl_done, args=(S_, key, tp, True))
 
 
 def cb_mm_cards(S_, key, terms):
@@ -3586,7 +3617,7 @@ def map_ui(S_, key):
 
 def plan_page(S_, key):
     dash_css()
-    st.title("📅 " + subj_name(key))
+    st.title(subj_name(key))
     tab_p, tab_m = st.tabs([ct("pl_tab_plan"), ct("pl_tab_map")])
     with tab_p:
         plan_ui(S_, key)
@@ -3596,7 +3627,7 @@ def plan_page(S_, key):
 
 def cards_page(S_, key):
     dash_css()
-    st.title("🃏 " + subj_name(key))
+    st.title(subj_name(key))
     flash = st.session_state.pop("cards_flash", None)
     if flash:
         st.success(flash)
@@ -3635,7 +3666,7 @@ ALLOW_PPLX = (not AUTH_ON) or (IS_OWNER or USER_USAGE.get("perplexity", 0) < PER
 # ======================= YAN PANEL =======================
 SB_CSS = """<style>
 .sb-brand{display:flex;align-items:center;gap:10px;margin:2px 0 12px}
-.sb-logo{width:40px;height:40px;border-radius:13px;display:grid;place-items:center;font-size:21px;background:linear-gradient(135deg,var(--tk-accent),var(--tk-accent2));box-shadow:var(--tk-shadow)}
+.sb-logo{width:38px;height:38px;border-radius:12px;display:grid;place-items:center;font-size:19px;font-weight:700;font-family:var(--tk-head);color:var(--tk-on);background:linear-gradient(135deg,var(--tk-accent),var(--tk-accent2));box-shadow:var(--tk-soft)}
 .sb-name{font-family:var(--tk-head);font-weight:700;font-size:1.05rem;line-height:1.15;color:var(--tk-text)}
 .sb-user{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:16px;background:var(--tk-surface);border:1px solid var(--tk-border);box-shadow:var(--tk-shadow);margin-bottom:10px}
 .sb-user .tk-bar{height:7px;margin-top:6px}
@@ -3714,13 +3745,13 @@ def providers_ui():
     u_now = _usage()
     for pid, cfg in PROVIDERS.items():
         if not os.getenv(cfg["env"]):
-            st.caption(f"❌ {cfg['label']} ({t('key_missing')}: {cfg['env']})")
+            st.caption(f"✕ {cfg['label']} ({t('key_missing')}: {cfg['env']})")
         elif not available(pid):
-            st.caption(f"⚠️ {cfg['label']} ({t('pkg_missing')})")
+            st.caption(f"! {cfg['label']} ({t('pkg_missing')})")
         else:
             cap = daily_cap(pid)
             extra = f" ({u_now.get(pid, 0)}/{cap})" if cap is not None else ""
-            st.caption(f"✅ {provider_label(pid)} → {resolve_model(pid)}{extra}")
+            st.caption(f"✓ {provider_label(pid)} → {resolve_model(pid)}{extra}")
     u = _usage()
     st.caption(t("usage") + ": " + ", ".join(f"{k} {v}" for k, v in u.items() if k != "date"))
 
@@ -3797,7 +3828,7 @@ def owner_feedback_ui(S_):
     if not recent:
         st.caption(ct("o_fb_none"))
     for r in recent:
-        with st.expander(f"👎 {r.get('subject', '')}: {(r.get('question') or '')[:70]}"):
+        with st.expander(f"{r.get('subject', '')}: {(r.get('question') or '')[:70]}"):
             st.text((r.get("question") or "")[:200])
             st.text((r.get("answer") or "")[:400])
 
@@ -3855,7 +3886,7 @@ def owner_access_ui(S_):
 
 
 def health_ui():
-    ok = lambda b: "✅" if b else "❌"
+    ok = lambda b: "✓" if b else "✕"
     st.caption(f"{ok(bool(os.getenv('GEMINI_API_KEY')))} {ct('h_gemini')}")
     if AUTH_ON:
         try:
@@ -3870,7 +3901,7 @@ def health_ui():
             books.append(f"{k_}: {db.get_collection('c_' + k_).count()}")
         except Exception:
             books.append(f"{k_}: ?")
-    st.caption(f"📚 {ct('h_books')}: " + ", ".join(books))
+    st.caption(f"{ct('h_books')}: " + ", ".join(books))
     perf = read_perf(50)
     if perf:
         import statistics as _st
@@ -4433,7 +4464,7 @@ def cb_setcat(c):
 
 # ======================= YAN PANEL =======================
 st.sidebar.markdown(
-    DASH_CSS + SB_CSS + '<div class="sb-brand"><div class="sb-logo">🎓</div><div class="sb-name">Tutor Komandam</div></div>',
+    DASH_CSS + SB_CSS + '<div class="sb-brand"><div class="sb-logo">T</div><div class="sb-name">Tutor Komandam</div></div>',
     unsafe_allow_html=True)
 if AUTH_ON:
     _lim = max(DAILY_QUESTIONS, 1)
@@ -4557,16 +4588,16 @@ for i, m in enumerate(chat["messages"]):
     with (user_msg() if m["role"] == "user" else st.chat_message(m["role"])):
         st.markdown(fix_math(m["content"]))
         if m.get("by"):
-            st.caption(f"🤖 {m['by']}")
+            st.caption(m['by'])
         if m.get("sources"):
             render_sources(m["content"], m["sources"], key, f"{chat['id']}_{i}")
         show_web_sources(m.get("web"))
         if m["role"] == "assistant":
-            b_spk, b_crd, b_up, b_dn, b_dl, _sp = hcols(f"act_{chat['id']}_{i}", [1, 1, 1, 1, 1, 6])
-            if b_spk.button("🔊", key=f"spk_{chat['id']}_{i}", help=t("read")):
+            b_spk, b_crd, b_up, b_dn, b_dl, _sp = hcols(f"act_{chat['id']}_{i}", [1.1, 1.1, 1.6, 1.8, 1.3, 2.2])
+            if b_spk.button(ct("act_read"), key=f"spk_{chat['id']}_{i}", help=t("read")):
                 d_, e_ = speak(m["content"], key)
                 show_audio(d_, e_, True)
-            if b_crd.button("🃏", key=f"crd_{chat['id']}_{i}", help=ct("c_from_ans_help")):
+            if b_crd.button(ct("act_card"), key=f"crd_{chat['id']}_{i}", help=ct("c_from_ans_help")):
                 if not quota_left():
                     st.warning(t("quota_hit"))
                 else:
@@ -4575,13 +4606,13 @@ for i, m in enumerate(chat["messages"]):
                         st.toast(ct("c_made", n=n_added) if n_added else ct("c_made0"))
             _q_prev = chat["messages"][i - 1]["content"] if i > 0 and chat["messages"][i - 1]["role"] == "user" else ""
             _fb_now = get_fb(S, key, chat["id"]).get(i, 0)
-            b_up.button("👍", key=f"fbu_{chat['id']}_{i}", help=ct("fb_up"),
+            b_up.button(ct("act_up"), key=f"fbu_{chat['id']}_{i}", help=ct("fb_up"),
                         type="primary" if _fb_now == 1 else "secondary",
                         on_click=cb_fb, args=(S, key, chat["id"], i, 1, _q_prev, m["content"]))
-            b_dn.button("👎", key=f"fbd_{chat['id']}_{i}", help=ct("fb_down"),
+            b_dn.button(ct("act_dn"), key=f"fbd_{chat['id']}_{i}", help=ct("fb_down"),
                         type="primary" if _fb_now == -1 else "secondary",
                         on_click=cb_fb, args=(S, key, chat["id"], i, -1, _q_prev, m["content"]))
-            b_dl.download_button("⬇️", data=answer_md(_q_prev, m, key), file_name="tutor_cavab.md",
+            b_dl.download_button(ct("act_dl"), data=answer_md(_q_prev, m, key), file_name="tutor_cavab.md",
                                  mime="text/markdown", key=f"dl_{chat['id']}_{i}", help=ct("dl_answer"))
 
 _bottom = getattr(st, "bottom", None) or getattr(st, "_bottom", None)
@@ -4698,7 +4729,7 @@ if q:
             _perf["verify"] = bool(use_verify)
             log_perf(_perf)
             by = used_label(st.session_state.get("used", ""))
-            st.caption(f"🤖 {t('answered')}: {by}")
+            st.caption(f"{t('answered')}: {by}")
             web_urls = list(st.session_state.get("web_sources", []))
             show_web_sources(web_urls)
             if srcs:
@@ -4709,7 +4740,7 @@ if q:
     if answer:
         if not chat["title"]:
             chat["title"] = re.sub(r"\s+", " ", q).strip()[:40]
-        saved_q = q + ("\n\n📎 " + ", ".join(att_names) if att_names else "")
+        saved_q = q + (f"\n\n{t('file_note')}" + ", ".join(att_names) if att_names else "")
         chat["messages"].append({"role": "user", "content": saved_q})
         chat["messages"].append({"role": "assistant", "content": answer, "sources": srcs,
                                  "web": web_urls, "by": f"{t('answered')}: {by}"})
@@ -4776,7 +4807,7 @@ with list_box:
         if st.session_state.get("cf_sel") not in _opts:
             st.session_state["cf_sel"] = "all"
         st.selectbox("cf_sel", _opts, key="cf_sel", label_visibility="collapsed",
-                     format_func=lambda v: ct("f_all") if v == "all" else ct("f_star") if v == "star" else "📁 " + v)
+                     format_func=lambda v: ct("f_all") if v == "all" else ct("f_star") if v == "star" else v)
     else:
         st.session_state["cf_sel"] = "all"
     _f = st.session_state.get("cf_sel", "all")
@@ -4790,13 +4821,13 @@ with list_box:
         if _cur and any(c_["id"] == _cur for c_ in _all_chats):
             st.session_state[f"mv_{_cur}"] = _meta.get(_cur, {}).get("f", "") if _meta.get(_cur, {}).get("f") in _fl else ""
             st.selectbox(ct("f_move"), [""] + _fl, key=f"mv_{_cur}", on_change=cb_setfolder, args=(_cur,),
-                         format_func=lambda v: ct("f_none") if v == "" else "📁 " + v)
+                         format_func=lambda v: ct("f_none") if v == "" else v)
         st.text_input(ct("f_new"), key="nf_name", max_chars=FOLDER_LEN)
         st.button(ct("f_add"), key="nf_btn", on_click=cb_newfolder)
         if st.session_state.pop("f_msg", None):
             st.caption(ct("f_limit"))
         for _n in _fl:
-            st.button(f"🗑 {ct('f_del')}: {_n}", key=f"fd_{_n}", on_click=cb_delfolder, args=(_n,))
+            st.button(f"{ct('f_del')}: {_n}", key=f"fd_{_n}", on_click=cb_delfolder, args=(_n,))
     for c in chats[:40]:
         c1, c2, c3 = hcols(f"cr_{c['id']}", [5, 1, 1])
         _star = bool(_meta.get(c["id"], {}).get("s"))
@@ -4804,7 +4835,7 @@ with list_box:
         with c1:
             wide(st.button, label, key=f"open_{c['id']}", on_click=cb_open, args=(c["id"],))
         with c2:
-            st.button("⭐" if _star else "☆", key=f"star_{c['id']}", help=ct("f_unpin") if _star else ct("f_pin"),
+            st.button("★" if _star else "☆", key=f"star_{c['id']}", help=ct("f_unpin") if _star else ct("f_pin"),
                       on_click=cb_star, args=(c["id"],))
         with c3:
-            st.button("🗑", key=f"del_{c['id']}", help=t("delete"), on_click=cb_delete, args=(key, c["id"]))
+            st.button("×", key=f"del_{c['id']}", help=t("delete"), on_click=cb_delete, args=(key, c["id"]))

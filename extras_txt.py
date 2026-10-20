@@ -111,6 +111,22 @@ _T.update({
 })
 
 
+_T.update({
+    "act_read": ("Oxu", "Read", "Озвучить"),
+    "act_card": ("Kart", "Card", "Карточка"),
+    "act_up": ("Faydalı", "Helpful", "Полезно"),
+    "act_dn": ("Faydasız", "Not helpful", "Не полезно"),
+    "act_dl": ("Yüklə", "Save", "Скачать"),
+})
+
+
+_T.update({
+    # emoji silindikdən sonra mənasını itirən sətirlər
+    "o_fb_title": ("Cavablara rəylər", "Answer feedback", "Отзывы об ответах"),
+    "o_fb_votes": ("Faydalı: {u} · Faydasız: {d}", "Helpful: {u} · Not helpful: {d}", "Полезно: {u} · Не полезно: {d}"),
+})
+
+
 def add(d):
     _T.update(d)
 

@@ -78,7 +78,7 @@ def swatch_row(selected, lang="az"):
 
 def hero(title, subtitle=""):
     sub = f'<p class="tk-sub">{subtitle}</p>' if subtitle else ""
-    return f'<div class="tk-hero"><div class="tk-logo">🎓</div><h1 class="tk-title">{title}</h1>{sub}</div>'
+    return f'<div class="tk-hero"><div class="tk-logo">T</div><h1 class="tk-title">{title}</h1>{sub}</div>'
 
 
 FONTS = (
@@ -520,6 +520,114 @@ div:has(> [role="listbox"]), div:has(> div > [role="listbox"]) {{
 [data-testid="stCameraInput"] {{ border-radius:14px; overflow:hidden; border:2px solid var(--tk-line); }}
 [data-testid="stCameraInput"] button {{ background:var(--tk-accent) !important; color:var(--tk-on) !important; border:none !important; }}
 [data-testid="stCameraInput"] button * {{ color:var(--tk-on) !important; }}
+
+/* =====================================================================
+   v2 dizayn: sakit quruluş (Claude üslubu) + yumşaq canlı detallar
+   Əvvəlki qaydaların üstünə yazılır, ona görə faylın sonuna qoyulub.
+   ===================================================================== */
+:root {{ --tk-radius:18px; --tk-soft:0 1px 2px rgba(0,0,0,.06), 0 8px 24px color-mix(in srgb, var(--tk-accent) 8%, transparent); }}
+::selection {{ background:color-mix(in srgb, var(--tk-accent) 30%, transparent); }}
+* {{ scrollbar-width:thin; scrollbar-color:color-mix(in srgb, var(--tk-muted) 45%, transparent) transparent; }}
+
+/* fon: hissəciklər söndürülür, ləkələr daha sakit və yavaş */
+[data-testid="stAppViewContainer"]::before {{ display:none !important; }}
+.stApp::before, .stApp::after {{ opacity:.42; filter:blur(24px); }}
+.stApp::before {{ animation-duration:38s !important; }}
+.stApp::after {{ animation-duration:46s !important; }}
+
+/* oxunaqlı eni və boşluq */
+[data-testid="stMainBlockContainer"] {{ max-width:1000px; padding-top:2.4rem; padding-bottom:6rem; }}
+.stApp h1 {{ font-weight:600; letter-spacing:-.02em; }}
+.stApp h2, .stApp h3 {{ font-weight:600; }}
+
+/* düymələr: sakit ikinci dərəcəli, yumşaq qalxma, əsas düymədə yavaş parıltı */
+.stApp button[data-testid="stBaseButton-secondary"], .stApp .stDownloadButton button, .stApp [data-testid="stBaseButton-secondary"] {{
+  border-radius:14px !important; font-weight:500; background:var(--tk-surface) !important;
+  border:1px solid var(--tk-border) !important; box-shadow:none;
+}}
+.stApp .stButton > button:hover, .stApp .stDownloadButton > button:hover, .stApp [data-testid="stFormSubmitButton"] > button:hover {{
+  transform:translateY(-1px) !important; filter:none; box-shadow:var(--tk-soft) !important; border-color:var(--tk-accent) !important;
+}}
+.stApp button[data-testid="stBaseButton-primary"], .stApp button[data-testid="stBaseButton-primaryFormSubmit"] {{
+  border-radius:14px !important; animation-duration:11s !important; box-shadow:0 1px 0 rgba(255,255,255,.18) inset;
+}}
+
+/* yan panel: söhbət siyahısı sakit "ghost" sətirlərdir */
+[data-testid="stSidebar"] {{ background:color-mix(in srgb, var(--tk-surface) 96%, transparent) !important; }}
+[data-testid="stSidebar"] button[data-testid="stBaseButton-secondary"] {{
+  background:transparent !important; border-color:transparent !important; justify-content:flex-start !important;
+  text-align:left; font-weight:500; border-radius:12px !important;
+}}
+[data-testid="stSidebar"] button[data-testid="stBaseButton-secondary"] > div, [data-testid="stSidebar"] button[data-testid="stBaseButton-secondary"] p {{
+  text-align:left; justify-content:flex-start; width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}}
+[data-testid="stSidebar"] button[data-testid="stBaseButton-secondary"]:hover {{
+  background:color-mix(in srgb, var(--tk-accent) 11%, transparent) !important; border-color:transparent !important; box-shadow:none !important;
+}}
+[data-testid="stSidebar"] .st-key-new_chat_btn button {{
+  background:var(--tk-surface) !important; border:1px solid var(--tk-accent) !important; justify-content:center !important;
+  font-weight:600;
+}}
+[data-testid="stSidebar"] .st-key-new_chat_btn button p, [data-testid="stSidebar"] .st-key-new_chat_btn button > div {{ text-align:center; justify-content:center; }}
+[data-testid="stSidebar"] [class*="st-key-star_"] button, [data-testid="stSidebar"] [class*="st-key-del_"] button, [data-testid="stSidebar"] [class*="st-key-nd_"] button {{
+  justify-content:center !important; color:var(--tk-muted) !important; padding-left:0 !important; padding-right:0 !important;
+}}
+[data-testid="stSidebar"] [class*="st-key-star_"] button:hover {{ color:var(--tk-accent) !important; }}
+[data-testid="stSidebar"] [class*="st-key-del_"] button:hover {{ color:#E5484D !important; }}
+
+/* daxiletmə sahələri: nazik çərçivə, fokusda vurğu */
+.stApp div[data-baseweb="input"], .stApp div[data-baseweb="textarea"], .stApp div[data-baseweb="select"],
+.stApp [data-testid="stTextAreaRootElement"], .stApp [data-testid="stTextInputRootElement"],
+.stApp [data-testid="stNumberInputContainer"], .stApp [data-testid="stDateInputRootElement"],
+.stApp [data-testid="stSelectbox"] div:has(> input), .stApp [data-testid="stMultiSelect"] div:has(> input) {{
+  border-width:1px !important; border-color:var(--tk-border) !important; border-radius:14px !important;
+}}
+
+/* söhbət: tutorun cavabı fonsuz mətndir, istifadəçi mesajı yumşaq qabarcıqdır */
+[data-testid="stChatMessage"] {{
+  background:transparent !important; border:0 !important; box-shadow:none !important; padding:10px 6px !important;
+  animation:tk-rise .42s cubic-bezier(.2,.7,.2,1) both !important;
+}}
+[data-testid="stChatMessage"]:hover {{ box-shadow:none !important; }}
+[data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) {{
+  background:color-mix(in srgb, var(--tk-accent) 9%, var(--tk-surface)) !important;
+  border:1px solid var(--tk-border) !important; border-radius:22px !important; padding:12px 18px !important;
+}}
+[data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] {{ line-height:1.68; }}
+[data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] p {{ margin-bottom:.7rem; }}
+
+/* sual xanası: sakit çərçivə, fokusda yumşaq axan işıq */
+.stApp div[data-testid="stChatInput"] {{
+  animation:none !important; border:1px solid var(--tk-border) !important; border-radius:26px !important;
+  background:var(--tk-surface) !important; box-shadow:var(--tk-soft) !important;
+}}
+.stApp div[data-testid="stChatInput"]:focus-within {{
+  border:2px solid transparent !important;
+  background:
+    linear-gradient(var(--tk-surface), var(--tk-surface)) padding-box,
+    conic-gradient(from var(--tk-ang), transparent 0deg, var(--tk-accent) 60deg, var(--tk-accent2) 120deg, transparent 180deg,
+      transparent 200deg, var(--tk-accent2) 250deg, var(--tk-accent) 310deg, transparent 360deg) border-box !important;
+  animation:tk-spin 7s linear infinite !important;
+  box-shadow:0 0 22px color-mix(in srgb, var(--tk-accent) 28%, transparent), var(--tk-soft) !important;
+}}
+
+/* kartlar, bölmələr */
+[data-testid="stExpander"] details, [data-testid="stForm"], [data-testid="stVerticalBlockBorderWrapper"] {{
+  border-radius:20px !important; border-color:var(--tk-border) !important; box-shadow:none;
+}}
+[data-testid="stVerticalBlockBorderWrapper"] {{ background:color-mix(in srgb, var(--tk-surface) 70%, transparent); }}
+[data-testid="stAlert"] {{ border-radius:16px !important; border:1px solid var(--tk-border); }}
+
+/* giriş səhifəsi və başlıq nişanı: emoji yerinə sadə hərf nişanı */
+.tk-logo {{
+  width:60px; height:60px; border-radius:20px; display:inline-grid !important; place-items:center;
+  font-family:var(--tk-head); font-size:30px !important; font-weight:700; line-height:1;
+  background:linear-gradient(135deg, var(--tk-accent), var(--tk-accent2)); color:var(--tk-on);
+  box-shadow:var(--tk-soft); animation:tk-float 7s ease-in-out infinite !important; filter:none !important;
+}}
+.tk-hero {{ padding:36px 0 14px; }}
+.stApp h1.tk-title {{ font-weight:600; animation-duration:14s; }}
+.tk-sub {{ font-size:15.5px; }}
 
 {reduce_block}
 @media (max-width: 640px) {{
