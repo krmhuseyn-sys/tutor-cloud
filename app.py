@@ -4234,7 +4234,8 @@ SET_CSS = """<style>
 [class*="st-key-srow_"] [data-testid="stElementContainer"]:not([class*="st-key-sgo_"]),[class*="st-key-srow_"] [data-testid="stMarkdown"],[class*="st-key-srow_"] [data-testid="stMarkdownContainer"],[class*="st-key-srow_"] .stMarkdown{margin:0 !important;padding:0 !important;width:100%}
 .tk-srow{box-sizing:border-box}
 [class*="st-key-sgo_"]{position:absolute !important;inset:0;z-index:3;margin:0 !important;width:100% !important;height:100% !important}
-[class*="st-key-sgo_"] button{width:100% !important;height:100% !important;min-height:0 !important;opacity:0;padding:0 !important;cursor:pointer;border-radius:0 !important}
+[class*="st-key-sgo_"] div{width:100% !important;height:100% !important;max-width:none !important;display:block !important}
+[class*="st-key-sgo_"] button{display:block !important;width:100% !important;height:100% !important;min-height:0 !important;opacity:0;padding:0 !important;cursor:pointer;border-radius:0 !important}
 [class*="st-key-srow_"]:hover .tk-srow{background:color-mix(in srgb,var(--tk-accent) 9%,transparent)}
 .tk-srow{display:flex;align-items:center;gap:16px;padding:16px 20px;min-height:68px;border-top:1px solid var(--tk-border);color:var(--tk-text);transition:background .15s}
 .tk-srow.first{border-top:0}
