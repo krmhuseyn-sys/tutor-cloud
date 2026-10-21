@@ -373,6 +373,7 @@ AUTH_ON = store.auth_enabled()  # Supabase açarları varsa giriş sistemi aktiv
 
 
 HROW_CSS = """<style>
+.tk-lbl-gap { font-size:.875rem; margin:0 0 .35rem; opacity:.85; }
 @media (max-width: 640px) {
   [class*="st-key-hrow_"] [data-testid="stHorizontalBlock"] { flex-wrap: nowrap !important; gap: .25rem !important; }
   [class*="st-key-hrow_"] [data-testid="stColumn"] { min-width: 0 !important; flex-shrink: 1 !important; }
@@ -4189,40 +4190,40 @@ def avatar_ui(letter):
              key="av_clear", on_click=cb_av_clear, args=(S,))
 
 
+def cb_ffpick(S_):
+    ui_ = st.session_state.get("ui", "az")
+    lab = st.session_state.get("ff_pick_" + ui_)
+    names = FONT_NAMES()
+    cb_ff(S_, next((f for f in FONT_ORDER if names[f] == lab), "default"))
+
+
 def font_ui():
-    st.markdown(SET_CSS + "<style>" + font_import([FONT_OPT[f][0] for f in FONT_ORDER if FONT_OPT[f][0]]) + "</style>",
-                unsafe_allow_html=True)
+    """Şrift: açılan siyahı + ölçü düymələri (yığcam)."""
     cur = st.session_state.get("ff_sel", "default")
     names = FONT_NAMES()
-    with kcont("sgroup_f"):
-        for n_, f_ in enumerate(FONT_ORDER):
-            stack = FONT_OPT[f_][1]
-            srow(f"f_{f_}", "check", names[f_], _e(ct("ff_sample_short")), on_click=cb_ff, args=(S, f_),
-                 first=(n_ == 0), font=stack, selected=(cur == f_))
-    st.caption(ct("ff_h_" + cur))
-    st.caption(ct("set_fs"))
-    fs_cols = hcols("fs", 4)
-    for c_, code_ in zip(fs_cols, ["s", "m", "l", "xl"]):
-        with c_:
-            wide(st.button, ct("fs_" + code_), key=f"fs_{code_}",
-                 type="primary" if st.session_state.get("fs_sel", "m") == code_ else "secondary",
-                 on_click=cb_fs, args=(S, code_))
+    ui_ = st.session_state.get("ui", "az")
+    labs = [names[f] for f in FONT_ORDER]
+    c1, c2 = st.columns([3, 2])
+    with c1:
+        st.selectbox(ct("set_g_font"), labs, index=FONT_ORDER.index(cur) if cur in FONT_ORDER else 0,
+                     key="ff_pick_" + ui_, on_change=cb_ffpick, args=(S,))
+    with c2:
+        st.markdown(f'<div class="tk-lbl-gap">{_e(ct("set_fs"))}</div>', unsafe_allow_html=True)
+        fs_cols = hcols("fs", 4)
+        for c_, code_ in zip(fs_cols, ["s", "m", "l", "xl"]):
+            with c_:
+                wide(st.button, ct("fs_" + code_), key=f"fs_{code_}",
+                     type="primary" if st.session_state.get("fs_sel", "m") == code_ else "secondary",
+                     on_click=cb_fs, args=(S, code_))
 
 
 def settings_cat_ui(cat, key, opts, choice):
     """Seçilmiş ayar kateqoriyasının məzmunu."""
     if cat == "ui":
         with st.container(border=True):
-            sec(ct("set_g_lang"))
             lang_picker()
-        with st.container(border=True):
-            sec(ct("set_g_font"))
             font_ui()
-        with st.container(border=True):
-            sec(ct("set_g_look"))
             theme_select()
-        with st.container(border=True):
-            sec(ct("set_g_read"))
             wide(st.button, ("✓ " if st.session_state.get("rd_mode") else "") + ct("rd_mode"), key="rd_btn",
                  type="primary" if st.session_state.get("rd_mode") else "secondary", on_click=cb_rd, args=(S,))
     elif cat == "profile":
