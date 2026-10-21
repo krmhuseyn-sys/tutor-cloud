@@ -392,7 +392,7 @@ def cur_theme():
     """Hansı tema göstərilsin: hesabdakı seçim, yoxsa qeydiyyatdakı önizləmə, yoxsa standart."""
     ss = st.session_state
     prof = ss.get("profile") or {}
-    pick = ss.get("theme_acc") or ss.get("theme_keep") or prof.get("theme") or ss.get("theme_sel")
+    pick = ss.get("theme_keep") or prof.get("theme") or ss.get("theme_sel")
     return themes.valid_theme(pick)
 
 
@@ -1300,7 +1300,10 @@ def cb_new():
 
 
 def cb_theme():
-    val = themes.valid_theme(st.session_state.get("theme_acc"))
+    ui_ = st.session_state.get("ui", "az")
+    lab = st.session_state.get("theme_acc_" + ui_)
+    val = next((k for k in themes.ORDER if themes.label(k, ui_) == lab), None)
+    val = themes.valid_theme(val)
     st.session_state["theme_keep"] = val  # seçici göstərilməyəndə (başqa bölmədə) də qalsın
     if AUTH_ON:
         try:
@@ -1312,8 +1315,9 @@ def cb_theme():
 
 def theme_select():
     cur = cur_theme()
-    st.selectbox(t("theme_title"), themes.ORDER, index=themes.ORDER.index(cur), key="theme_acc",
-                 format_func=lambda k: themes.label(k, st.session_state.get("ui", "az")),
+    ui_ = st.session_state.get("ui", "az")
+    labs = [themes.label(k, ui_) for k in themes.ORDER]
+    st.selectbox(t("theme_title"), labs, index=themes.ORDER.index(cur), key="theme_acc_" + ui_,
                  on_change=cb_theme)
     tgl(t("anim_force"), "anim_force", help=t("anim_help"))
 
