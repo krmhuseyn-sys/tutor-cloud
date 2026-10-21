@@ -1481,10 +1481,20 @@ def try_restore():
     return True
 
 
+_KEEP_ON_LOGOUT = {"ui", "clear_cookie", "blocked_msg", "signup_tries", "login_fails"}
+
+
 def drop_login():
-    for k in ("sb", "user", "profile", "cid", "cur_key", "last_audio", "theme_sel", "theme_acc", "remember", "rt_written", "export_blob", "blk_at"):
-        st.session_state.pop(k, None)
-    st.session_state["clear_cookie"] = True
+    """Çıxışda və ya sessiya bitəndə ŞƏXSİ olan hər şey silinir (prefs, avatar, keşlər, qeydlər indeksi, PDF, söhbət siyahısı).
+    Eyni brauzerdə başqa hesabla girəndə əvvəlki istifadəçinin məlumatı görünməsin."""
+    ss = st.session_state
+    for k in list(ss.keys()):
+        if k not in _KEEP_ON_LOGOUT:
+            try:
+                del ss[k]
+            except Exception:
+                pass
+    ss["clear_cookie"] = True
 
 
 def do_logout():
