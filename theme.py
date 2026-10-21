@@ -76,6 +76,25 @@ def swatch_row(selected, lang="az"):
     return '<div class="tk-swrow">' + "".join(cards) + "</div>"
 
 
+def picker_css():
+    """Tema seçimi düymələri: hər düymə öz temasının real fonunu, mətn rəngini və vurğu zolağını göstərir."""
+    rules = [
+        ".st-key-thm_grid{display:grid !important;grid-template-columns:repeat(auto-fit,minmax(118px,1fr));gap:10px !important;margin:4px 0 14px}",
+        ".st-key-thm_grid [data-testid=\"stElementContainer\"]{width:100% !important}",
+    ]
+    for k, p in THEMES.items():
+        sel = f'.stApp .st-key-thm_{k} button[data-testid^="stBaseButton"]'
+        rules.append(
+            f'{sel}{{background:linear-gradient(135deg,{p["bg"]},{p["bg2"]}) !important;color:{p["text"]} !important;'
+            f'border:1.5px solid {p["border"]} !important;border-radius:16px !important;min-height:64px;font-weight:600;'
+            f'box-shadow:inset 0 -6px 0 {p["accent"]} !important;animation:none !important}}'
+            f'{sel} *{{color:{p["text"]} !important}}'
+            f'.stApp .st-key-thm_{k} button[data-testid="stBaseButton-primary"]{{border-color:{p["accent"]} !important;'
+            f'box-shadow:inset 0 -6px 0 {p["accent"]},0 0 0 3px {p["accent"]}55 !important}}'
+            f'{sel}:hover{{transform:translateY(-2px) !important}}')
+    return "<style>" + "".join(rules) + "</style>"
+
+
 def hero(title, subtitle=""):
     sub = f'<p class="tk-sub">{subtitle}</p>' if subtitle else ""
     return f'<div class="tk-hero"><div class="tk-logo">T</div><h1 class="tk-title">{title}</h1>{sub}</div>'
@@ -409,7 +428,7 @@ div:has(> [role="listbox"]), div:has(> div > [role="listbox"]) {{
 .stApp .stButton > button:active {{ transform:translateY(0) scale(.98); }}
 .stApp button[data-testid="stBaseButton-primary"], .stApp button[data-testid="stBaseButton-primaryFormSubmit"],
 .stApp .stButton > button[kind="primary"], .stApp [data-testid="stFormSubmitButton"] > button[kind="primaryFormSubmit"] {{
-  background:linear-gradient(100deg, var(--tk-accent), var(--tk-accent2), var(--tk-accent)) !important;
+  background:linear-gradient(100deg, var(--tk-accent), color-mix(in srgb, var(--tk-accent) 68%, var(--tk-accent2)), var(--tk-accent)) !important;
   background-size:220% 100% !important; animation:tk-shine 6s ease-in-out infinite;
 }}
 
@@ -486,7 +505,7 @@ div:has(> [role="listbox"]), div:has(> div > [role="listbox"]) {{
 [data-testid="stPopoverBody"] button[data-testid^="stBaseButton"] * {{ color:var(--tk-text) !important; }}
 [data-testid="stPopoverBody"] button[data-testid^="stBaseButton"]:hover {{ border-color:var(--tk-accent) !important; }}
 [data-testid="stPopoverBody"] button[data-testid="stBaseButton-primary"] {{
-  background:linear-gradient(100deg, var(--tk-accent), var(--tk-accent2), var(--tk-accent)) !important;
+  background:linear-gradient(100deg, var(--tk-accent), color-mix(in srgb, var(--tk-accent) 68%, var(--tk-accent2)), var(--tk-accent)) !important;
   background-size:220% 100% !important; animation:tk-shine 6s ease-in-out infinite; border-color:transparent !important;
 }}
 [data-testid="stPopoverBody"] button[data-testid="stBaseButton-primary"] * {{ color:var(--tk-on) !important; }}
@@ -552,16 +571,19 @@ div:has(> [role="listbox"]), div:has(> div > [role="listbox"]) {{
   border-radius:14px !important; animation-duration:11s !important; box-shadow:0 1px 0 rgba(255,255,255,.18) inset;
 }}
 
-/* yan panel: söhbət siyahısı sakit "ghost" sətirlərdir */
+/* yan panel: yalnız söhbət siyahısı sətirləri sakit "ghost" görünür; qalan düymələr (bölmə, rejim, alt hissə) eynidir */
 [data-testid="stSidebar"] {{ background:color-mix(in srgb, var(--tk-surface) 96%, transparent) !important; }}
-[data-testid="stSidebar"] button[data-testid="stBaseButton-secondary"] {{
+[data-testid="stSidebar"] [class*="st-key-open_"] button[data-testid="stBaseButton-secondary"],
+[data-testid="stSidebar"] [class*="st-key-find_"] button[data-testid="stBaseButton-secondary"] {{
   background:transparent !important; border-color:transparent !important; justify-content:flex-start !important;
   text-align:left; font-weight:500; border-radius:12px !important;
 }}
-[data-testid="stSidebar"] button[data-testid="stBaseButton-secondary"] > div, [data-testid="stSidebar"] button[data-testid="stBaseButton-secondary"] p {{
+[data-testid="stSidebar"] [class*="st-key-open_"] button > div, [data-testid="stSidebar"] [class*="st-key-open_"] button p,
+[data-testid="stSidebar"] [class*="st-key-find_"] button > div, [data-testid="stSidebar"] [class*="st-key-find_"] button p {{
   text-align:left; justify-content:flex-start; width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
 }}
-[data-testid="stSidebar"] button[data-testid="stBaseButton-secondary"]:hover {{
+[data-testid="stSidebar"] [class*="st-key-open_"] button[data-testid="stBaseButton-secondary"]:hover,
+[data-testid="stSidebar"] [class*="st-key-find_"] button[data-testid="stBaseButton-secondary"]:hover {{
   background:color-mix(in srgb, var(--tk-accent) 11%, transparent) !important; border-color:transparent !important; box-shadow:none !important;
 }}
 [data-testid="stSidebar"] .st-key-new_chat_btn button {{

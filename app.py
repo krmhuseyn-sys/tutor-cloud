@@ -1895,10 +1895,12 @@ def username_screen(stor):
     st.caption(t("username_rules"))
     st.session_state.setdefault("theme_sel", themes.DEFAULT_THEME)
     st.markdown("**" + t("theme_pick") + "**")
-    st.markdown(themes.swatch_row(st.session_state["theme_sel"], st.session_state.get("ui", "az")),
-                unsafe_allow_html=True)
-    st.radio("theme", themes.ORDER, key="theme_sel", horizontal=True, label_visibility="collapsed",
-             format_func=lambda k: themes.label(k, st.session_state.get("ui", "az")))
+    st.markdown(themes.picker_css(), unsafe_allow_html=True)
+    with st.container(key="thm_grid"):
+        for k_ in themes.ORDER:
+            wide(st.button, ("✓ " if st.session_state["theme_sel"] == k_ else "") + themes.label(k_, st.session_state.get("ui", "az")),
+                 key=f"thm_{k_}", type="primary" if st.session_state["theme_sel"] == k_ else "secondary",
+                 on_click=cb_pick, args=("theme_sel", k_))
     with st.form("uname_form"):
         name = st.text_input(t("username_label"), key="uname")
         go = st.form_submit_button(t("username_save"))
