@@ -380,21 +380,9 @@ HROW_CSS = """<style>
   [class*="st-key-hrow_"] button { padding-left: .3rem !important; padding-right: .3rem !important; min-width: 0 !important; }
   [class*="st-key-hrow_"] button p { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 }
-/* rəngarənglik: yalnız qoşulu düymələr, rənglər temaya qarışdırılır */
-.stApp [class*="st-key-tgl_anim_force"] button[data-testid="stBaseButton-primary"] { background:linear-gradient(100deg, color-mix(in srgb, #14b8a6 72%, var(--tk-accent)), color-mix(in srgb, #0ea5e9 72%, var(--tk-accent))) !important; border-color:transparent !important; color:#fff !important; }
-.stApp [class*="st-key-rd_btn"] button[data-testid="stBaseButton-primary"] { background:linear-gradient(100deg, color-mix(in srgb, #f59e0b 72%, var(--tk-accent)), color-mix(in srgb, #f97316 72%, var(--tk-accent))) !important; border-color:transparent !important; color:#fff !important; }
-.stApp [class*="st-key-tgl_tg_web"] button[data-testid="stBaseButton-primary"] { background:linear-gradient(100deg, color-mix(in srgb, #0ea5e9 72%, var(--tk-accent)), color-mix(in srgb, #8b5cf6 72%, var(--tk-accent))) !important; border-color:transparent !important; color:#fff !important; }
-.stApp [class*="st-key-tgl_tg_verify"] button[data-testid="stBaseButton-primary"] { background:linear-gradient(100deg, color-mix(in srgb, #22c55e 72%, var(--tk-accent)), color-mix(in srgb, #14b8a6 72%, var(--tk-accent))) !important; border-color:transparent !important; color:#fff !important; }
-.stApp [class*="st-key-tgl_tg_speak"] button[data-testid="stBaseButton-primary"] { background:linear-gradient(100deg, color-mix(in srgb, #f43f5e 72%, var(--tk-accent)), color-mix(in srgb, #f97316 72%, var(--tk-accent))) !important; border-color:transparent !important; color:#fff !important; }
-.stApp [class*="st-key-tgl_tg_voice"] button[data-testid="stBaseButton-primary"] { background:linear-gradient(100deg, color-mix(in srgb, #8b5cf6 72%, var(--tk-accent)), color-mix(in srgb, #f43f5e 72%, var(--tk-accent))) !important; border-color:transparent !important; color:#fff !important; }
-.stApp [class*="st-key-tgl_tg_vchat"] button[data-testid="stBaseButton-primary"] { background:linear-gradient(100deg, color-mix(in srgb, #f59e0b 72%, var(--tk-accent)), color-mix(in srgb, #f43f5e 72%, var(--tk-accent))) !important; border-color:transparent !important; color:#fff !important; }
-.stApp [class*="st-key-fs_s"] button[data-testid="stBaseButton-primary"] { background:linear-gradient(100deg, color-mix(in srgb, #22c55e 72%, var(--tk-accent)), color-mix(in srgb, #14b8a6 72%, var(--tk-accent))) !important; border-color:transparent !important; color:#fff !important; }
-.stApp [class*="st-key-fs_m"] button[data-testid="stBaseButton-primary"] { background:linear-gradient(100deg, color-mix(in srgb, #0ea5e9 72%, var(--tk-accent)), color-mix(in srgb, #8b5cf6 72%, var(--tk-accent))) !important; border-color:transparent !important; color:#fff !important; }
-.stApp [class*="st-key-fs_l"] button[data-testid="stBaseButton-primary"] { background:linear-gradient(100deg, color-mix(in srgb, #f59e0b 72%, var(--tk-accent)), color-mix(in srgb, #f97316 72%, var(--tk-accent))) !important; border-color:transparent !important; color:#fff !important; }
-.stApp [class*="st-key-fs_xl"] button[data-testid="stBaseButton-primary"] { background:linear-gradient(100deg, color-mix(in srgb, #f43f5e 72%, var(--tk-accent)), color-mix(in srgb, #8b5cf6 72%, var(--tk-accent))) !important; border-color:transparent !important; color:#fff !important; }
-.stApp [class*="st-key-lang_az"] button[data-testid="stBaseButton-primary"] { background:linear-gradient(100deg, color-mix(in srgb, #14b8a6 72%, var(--tk-accent)), color-mix(in srgb, #0ea5e9 72%, var(--tk-accent))) !important; border-color:transparent !important; color:#fff !important; }
-.stApp [class*="st-key-lang_en"] button[data-testid="stBaseButton-primary"] { background:linear-gradient(100deg, color-mix(in srgb, #f59e0b 72%, var(--tk-accent)), color-mix(in srgb, #f97316 72%, var(--tk-accent))) !important; border-color:transparent !important; color:#fff !important; }
-.stApp [class*="st-key-lang_ru"] button[data-testid="stBaseButton-primary"] { background:linear-gradient(100deg, color-mix(in srgb, #f43f5e 72%, var(--tk-accent)), color-mix(in srgb, #8b5cf6 72%, var(--tk-accent))) !important; border-color:transparent !important; color:#fff !important; }
+.stApp [data-testid="stVerticalBlockBorderWrapper"]:has(> div > [data-testid="stWidgetLabel"], > div > div > [data-testid="stSelectbox"]) { box-shadow:inset 0 2px 0 color-mix(in srgb, var(--tk-accent) 60%, transparent); }
+.stApp [data-testid="stWidgetLabel"] p::before { content:""; display:inline-block; width:6px; height:6px; margin-right:7px;
+  border-radius:50%; vertical-align:middle; background:linear-gradient(135deg, var(--tk-accent), var(--tk-accent2)); }
 </style>"""
 
 
