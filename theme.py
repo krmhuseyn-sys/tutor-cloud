@@ -629,6 +629,141 @@ div:has(> [role="listbox"]), div:has(> div > [role="listbox"]) {{
 .stApp h1.tk-title {{ font-weight:600; animation-duration:14s; }}
 .tk-sub {{ font-size:15.5px; }}
 
+/* =====================================================================
+   v3 dizayn: boş ekran, giriş kartı, sekmələr, kartlar, cədvəllər, mobil
+   ===================================================================== */
+html {{ -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility; }}
+.stApp :focus-visible {{ outline:2px solid var(--tk-accent); outline-offset:2px; border-radius:8px; }}
+
+/* boş söhbət ekranı */
+.tk-empty {{ text-align:center; padding:6vh 0 18px; animation:tk-rise .55s cubic-bezier(.2,.7,.2,1) both; }}
+.tk-empty-mark {{
+  width:54px; height:54px; margin:0 auto 14px; border-radius:18px; display:grid; place-items:center;
+  font-family:var(--tk-head); font-weight:700; font-size:26px; color:var(--tk-on);
+  background:linear-gradient(135deg, var(--tk-accent), var(--tk-accent2)); box-shadow:var(--tk-soft);
+  animation:tk-float 8s ease-in-out infinite;
+}}
+.stApp .tk-empty h2 {{ font-size:clamp(24px, 4.5vw, 34px); font-weight:600; margin:0 0 6px; padding:0; }}
+.tk-empty p {{ color:var(--tk-muted) !important; margin:0; font-size:15.5px; }}
+.stApp .st-key-sugg button[data-testid^="stBaseButton"] {{
+  min-height:74px; justify-content:flex-start !important; text-align:left; padding:14px 18px !important;
+  border-radius:18px !important; background:color-mix(in srgb, var(--tk-surface) 88%, transparent) !important;
+  border:1px solid var(--tk-border) !important; font-weight:500; line-height:1.4;
+  transition:transform .2s ease, border-color .2s ease, box-shadow .2s ease, background .2s ease;
+}}
+.stApp .st-key-sugg button[data-testid^="stBaseButton"] p, .stApp .st-key-sugg button[data-testid^="stBaseButton"] > div {{ text-align:left; justify-content:flex-start; width:100%; white-space:normal; }}
+.stApp .st-key-sugg button[data-testid^="stBaseButton"]:hover {{
+  transform:translateY(-2px) !important; border-color:var(--tk-accent) !important; box-shadow:var(--tk-soft) !important;
+  background:color-mix(in srgb, var(--tk-accent) 8%, var(--tk-surface)) !important;
+}}
+
+/* giriş səhifəsi: mərkəzdə dar kart */
+.st-key-login_card {{
+  max-width:470px; margin:6px auto 0; padding:10px 24px 20px; border-radius:26px;
+  background:color-mix(in srgb, var(--tk-surface) 90%, transparent); border:1px solid var(--tk-border);
+  box-shadow:var(--tk-soft); backdrop-filter:blur(10px); animation:tk-rise .6s .1s cubic-bezier(.2,.7,.2,1) both;
+}}
+.st-key-login_card [data-testid="stForm"] {{ border:0 !important; padding:0 !important; background:transparent !important; }}
+.st-key-login_card button[data-testid="stBaseButton-secondaryFormSubmit"], .st-key-login_card [data-testid="stFormSubmitButton"] button {{
+  width:100%; min-height:46px; font-weight:600;
+}}
+
+/* sekmələr: yumşaq hap formasında */
+.stApp [data-baseweb="tab-list"] {{
+  gap:4px; padding:4px; background:var(--tk-surface2); border-radius:16px; border:1px solid var(--tk-border);
+}}
+.stApp [data-baseweb="tab"] {{
+  border-radius:12px !important; padding:8px 16px !important; height:auto !important; transition:background .2s, color .2s;
+}}
+.stApp [data-baseweb="tab"][aria-selected="true"] {{
+  background:var(--tk-surface) !important; color:var(--tk-text) !important; box-shadow:0 1px 3px rgba(0,0,0,.14);
+}}
+.stApp [data-baseweb="tab"]:hover {{ color:var(--tk-text) !important; }}
+.stApp [data-baseweb="tab-highlight"], .stApp [data-baseweb="tab-border"] {{ display:none !important; }}
+.stApp [data-testid="stTabs"] [role="tabpanel"] {{ padding-top:14px; }}
+
+/* radio: seçilən variant vurğulanır */
+.stApp [data-testid="stRadio"] [role="radiogroup"] label {{
+  border-radius:12px; padding:6px 12px; border:1px solid transparent; transition:background .18s, border-color .18s;
+}}
+.stApp [data-testid="stRadio"] [role="radiogroup"] label:has(input:checked) {{
+  background:color-mix(in srgb, var(--tk-accent) 12%, transparent); border-color:color-mix(in srgb, var(--tk-accent) 45%, transparent);
+}}
+.stApp [data-testid="stRadio"] [role="radiogroup"] label:hover {{ background:color-mix(in srgb, var(--tk-accent) 7%, transparent); transform:none; }}
+
+/* cavabın altındakı düymə sırası: kiçik, fonsuz, sakit */
+.stApp [class*="st-key-hrow_act_"] button[data-testid^="stBaseButton"] {{
+  background:transparent !important; border-color:transparent !important; color:var(--tk-muted) !important;
+  font-size:.82rem !important; min-height:32px !important; padding:2px 8px !important; border-radius:10px !important;
+}}
+.stApp [class*="st-key-hrow_act_"] button[data-testid^="stBaseButton"]:hover {{
+  background:color-mix(in srgb, var(--tk-accent) 10%, transparent) !important; color:var(--tk-text) !important; box-shadow:none !important;
+  border-color:transparent !important;
+}}
+.stApp [class*="st-key-hrow_act_"] button[data-testid^="stBaseButton"] * {{ color:inherit !important; }}
+
+/* mənbə və açılan bölmələr: kiçik və sakit */
+[data-testid="stChatMessage"] [data-testid="stExpander"] details {{ background:transparent !important; border-radius:14px !important; }}
+[data-testid="stChatMessage"] [data-testid="stExpander"] summary {{ font-size:.9rem; color:var(--tk-muted); }}
+[data-testid="stChatMessage"] [data-testid="stCaptionContainer"] {{ margin-top:2px; }}
+
+/* cədvəl, kod və sitat (cavab mətnində) */
+.stApp [data-testid="stMarkdownContainer"] table {{
+  border-collapse:separate; border-spacing:0; width:100%; border:1px solid var(--tk-border); border-radius:14px; overflow:hidden; margin:.5rem 0 1rem;
+}}
+.stApp [data-testid="stMarkdownContainer"] th {{ background:var(--tk-surface2); font-weight:600; text-align:left; }}
+.stApp [data-testid="stMarkdownContainer"] th, .stApp [data-testid="stMarkdownContainer"] td {{
+  padding:9px 14px; border:0; border-bottom:1px solid var(--tk-border); color:var(--tk-text);
+}}
+.stApp [data-testid="stMarkdownContainer"] tr:last-child td {{ border-bottom:0; }}
+.stApp [data-testid="stMarkdownContainer"] tbody tr:hover td {{ background:color-mix(in srgb, var(--tk-accent) 6%, transparent); }}
+.stApp [data-testid="stMarkdownContainer"] blockquote {{
+  border-left:3px solid var(--tk-accent); margin:.6rem 0; padding:2px 14px; color:var(--tk-muted); background:transparent;
+}}
+.stApp pre {{ border:1px solid var(--tk-border); border-radius:14px !important; }}
+.stApp [data-testid="stMarkdownContainer"] :not(pre) > code {{ padding:2px 6px; font-size:.88em; }}
+
+/* proqres zolağı, spinner, metric */
+.stApp [data-testid="stProgress"] > div > div {{ background:var(--tk-surface2) !important; border-radius:99px; }}
+.stApp [data-testid="stProgress"] > div > div > div {{ background:linear-gradient(90deg, var(--tk-accent), var(--tk-accent2)) !important; border-radius:99px; }}
+.stApp [data-testid="stSpinner"] svg, .stApp [data-testid="stSpinner"] i {{ color:var(--tk-accent) !important; border-top-color:var(--tk-accent) !important; }}
+.stApp [data-testid="stMetric"] {{
+  background:var(--tk-surface); border:1px solid var(--tk-border); border-radius:20px; padding:14px 18px;
+}}
+.stApp [data-testid="stMetricValue"] {{ font-family:var(--tk-head); font-weight:700; }}
+
+/* flashcard: böyük, mərkəzləşdirilmiş kart; qiymət düymələri rənglənir */
+.st-key-fc_front, .st-key-fc_back {{
+  min-height:170px; display:flex; flex-direction:column; justify-content:center; text-align:center;
+  border-radius:26px !important; padding:22px 26px !important; box-shadow:var(--tk-soft);
+  animation:tk-rise .4s cubic-bezier(.2,.7,.2,1) both;
+}}
+.st-key-fc_front {{ background:color-mix(in srgb, var(--tk-surface) 92%, transparent) !important; }}
+.st-key-fc_back {{ background:color-mix(in srgb, var(--tk-accent) 8%, var(--tk-surface)) !important; border-color:color-mix(in srgb, var(--tk-accent) 40%, transparent) !important; }}
+.st-key-fc_front [data-testid="stMarkdownContainer"], .st-key-fc_back [data-testid="stMarkdownContainer"] {{ font-size:1.2rem; line-height:1.55; }}
+.st-key-fc_front [data-testid="stCaptionContainer"], .st-key-fc_back [data-testid="stCaptionContainer"] {{ text-transform:uppercase; letter-spacing:.1em; font-size:.7rem; }}
+.stApp .st-key-rv_g0 button[data-testid^="stBaseButton"] {{ border-color:#E5484D !important; }} .stApp .st-key-rv_g0 button[data-testid^="stBaseButton"]:hover {{ background:color-mix(in srgb, #E5484D 14%, transparent) !important; }}
+.stApp .st-key-rv_g1 button[data-testid^="stBaseButton"] {{ border-color:#F08C00 !important; }} .stApp .st-key-rv_g1 button[data-testid^="stBaseButton"]:hover {{ background:color-mix(in srgb, #F08C00 14%, transparent) !important; }}
+.stApp .st-key-rv_g2 button[data-testid^="stBaseButton"] {{ border-color:#30A46C !important; }} .stApp .st-key-rv_g2 button[data-testid^="stBaseButton"]:hover {{ background:color-mix(in srgb, #30A46C 14%, transparent) !important; }}
+.stApp .st-key-rv_g3 button[data-testid^="stBaseButton"] {{ border-color:var(--tk-accent) !important; }} .stApp .st-key-rv_g3 button[data-testid^="stBaseButton"]:hover {{ background:color-mix(in srgb, var(--tk-accent) 14%, transparent) !important; }}
+
+/* yan panel: başlıq, bölmə etiketləri, alt hissə */
+[data-testid="stSidebar"] [data-testid="stSidebarUserContent"] {{ padding-top:1.2rem; }}
+[data-testid="stSidebar"] h3 {{ font-size:.74rem !important; letter-spacing:.09em; text-transform:uppercase; color:var(--tk-muted) !important; font-family:inherit !important; margin:14px 0 6px; font-weight:600; }}
+[data-testid="stSidebar"] hr {{ margin:12px 0; }}
+.st-key-sb_foot {{ border-top:1px solid var(--tk-border); }}
+
+/* telefon */
+@media (max-width: 640px) {{
+  [data-testid="stMainBlockContainer"] {{ padding-left:14px; padding-right:14px; padding-top:1.4rem; }}
+  .stApp h1 {{ font-size:1.65rem; }}
+  .tk-empty {{ padding-top:2vh; }}
+  .st-key-login_card {{ padding:8px 16px 16px; border-radius:22px; }}
+  .st-key-fc_front, .st-key-fc_back {{ min-height:140px; padding:16px 18px !important; }}
+  .stApp [data-baseweb="tab"] {{ padding:7px 11px !important; }}
+  .stApp div[data-testid="stChatInput"] {{ border-radius:22px !important; }}
+}}
+
 {reduce_block}
 @media (max-width: 640px) {{
   .stApp::before, .stApp::after {{ opacity:.7; }}

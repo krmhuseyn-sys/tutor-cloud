@@ -127,6 +127,13 @@ _T.update({
 })
 
 
+_T.update({
+    "empty_hello": ("Nə öyrənmək istəyirsən?", "What would you like to learn?", "Что хочешь выучить?"),
+    "fc_q": ("Sual", "Question", "Вопрос"),
+    "fc_a": ("Cavab", "Answer", "Ответ"),
+})
+
+
 def add(d):
     _T.update(d)
 

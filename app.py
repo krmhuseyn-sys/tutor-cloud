@@ -1841,51 +1841,52 @@ def reset_panel():
 def login_screen():
     lang_picker()
     st.markdown(themes.hero("Tutor Komandam", t("welcome_sub")), unsafe_allow_html=True)
-    tab_in, tab_up = st.tabs([t("login"), t("signup")])
-    ss = st.session_state
-    with tab_in:
-        if ss.get("su_step") == 2:
-            st.info(t("signup_pending"))
-        if ss.get("lg_step") == 2:
-            st.caption(t("login_code_sent"))
-            with st.form("login_code_form"):
-                lcode = st.text_input(t("code_label"), key="lg_code", max_chars=8)
-                go_c = st.form_submit_button(t("verify_btn"))
-            if go_c:
-                do_login_verify(lcode)
-            st.button(t("back"), key="lg_back", on_click=cancel_steps, args=(_LG_KEYS,))
-        else:
-            with st.form("login_form"):
-                email = st.text_input(t("email"), key="li_email")
-                pw = st.text_input(t("password"), type="password", key="li_pw")
-                rem = st.checkbox(t("remember"), value=True, key="li_rem")
-                go = st.form_submit_button(t("login_btn"))
-            if go:
-                do_login(email, pw, rem)
-            with st.expander(t("forgot"), expanded=bool(ss.get("rs_step") == 2 or ss.get("rs_done"))):
-                reset_panel()
-    with tab_up:
-        if ss.get("su_step") == 2:
-            st.caption(t("signup_code_sent"))
-            with st.form("signup_code_form"):
-                scode = st.text_input(t("code_label"), key="su_vcode", max_chars=8)
-                go_s = st.form_submit_button(t("verify_btn"))
-            if go_s:
-                do_signup_verify(scode)
-            st.button(t("back"), key="su_back", on_click=cancel_steps, args=(_SU_KEYS,))
-        else:
-            with st.form("signup_form"):
-                email2 = st.text_input(t("email"), key="su_email")
-                pw_a = st.text_input(t("password"), type="password", key="su_pw")
-                pw_b = st.text_input(t("password2"), type="password", key="su_pw2")
-                code = st.text_input(t("invite"), key="su_code") if invite_needed() else ""
-                agree = st.checkbox(t("consent"), key="su_agree")
-                go2 = st.form_submit_button(t("signup_btn"))
-            if go2:
-                do_signup(email2, pw_a, pw_b, code, agree)
-    st.caption(t("privacy"))
-    if st.query_params.get("debug") == "1":  # diaqnostika: token dəyəri göstərilmir
-        st.caption(f"debug: bərpa={st.session_state.get('restore_dbg')}")
+    with st.container(key="login_card"):
+        tab_in, tab_up = st.tabs([t("login"), t("signup")])
+        ss = st.session_state
+        with tab_in:
+            if ss.get("su_step") == 2:
+                st.info(t("signup_pending"))
+            if ss.get("lg_step") == 2:
+                st.caption(t("login_code_sent"))
+                with st.form("login_code_form"):
+                    lcode = st.text_input(t("code_label"), key="lg_code", max_chars=8)
+                    go_c = st.form_submit_button(t("verify_btn"))
+                if go_c:
+                    do_login_verify(lcode)
+                st.button(t("back"), key="lg_back", on_click=cancel_steps, args=(_LG_KEYS,))
+            else:
+                with st.form("login_form"):
+                    email = st.text_input(t("email"), key="li_email")
+                    pw = st.text_input(t("password"), type="password", key="li_pw")
+                    rem = st.checkbox(t("remember"), value=True, key="li_rem")
+                    go = st.form_submit_button(t("login_btn"))
+                if go:
+                    do_login(email, pw, rem)
+                with st.expander(t("forgot"), expanded=bool(ss.get("rs_step") == 2 or ss.get("rs_done"))):
+                    reset_panel()
+        with tab_up:
+            if ss.get("su_step") == 2:
+                st.caption(t("signup_code_sent"))
+                with st.form("signup_code_form"):
+                    scode = st.text_input(t("code_label"), key="su_vcode", max_chars=8)
+                    go_s = st.form_submit_button(t("verify_btn"))
+                if go_s:
+                    do_signup_verify(scode)
+                st.button(t("back"), key="su_back", on_click=cancel_steps, args=(_SU_KEYS,))
+            else:
+                with st.form("signup_form"):
+                    email2 = st.text_input(t("email"), key="su_email")
+                    pw_a = st.text_input(t("password"), type="password", key="su_pw")
+                    pw_b = st.text_input(t("password2"), type="password", key="su_pw2")
+                    code = st.text_input(t("invite"), key="su_code") if invite_needed() else ""
+                    agree = st.checkbox(t("consent"), key="su_agree")
+                    go2 = st.form_submit_button(t("signup_btn"))
+                if go2:
+                    do_signup(email2, pw_a, pw_b, code, agree)
+        st.caption(t("privacy"))
+        if st.query_params.get("debug") == "1":  # diaqnostika: token dəyəri göstərilmir
+            st.caption(f"debug: bərpa={st.session_state.get('restore_dbg')}")
 
 
 def username_screen(stor):
@@ -2505,12 +2506,14 @@ def review_ui(S_, key, cnt):
         return
     card = rv["queue"][0]
     st.caption(ct("c_left") + str(len(rv["queue"])))
-    with st.container(border=True):
+    with st.container(border=True, key="fc_front"):
+        st.caption(ct("fc_q"))
         st.markdown(fix_math(card["front"]))
     if not rv["show"]:
         st.button(ct("c_show"), key="rv_show", type="primary", on_click=cb_rv_show, args=(key,))
         return
-    with st.container(border=True):
+    with st.container(border=True, key="fc_back"):
+        st.caption(ct("fc_a"))
         st.markdown(fix_math(card["back"]))
         if card.get("src"):
             pg = f", {t('page_word')} {card['page']}" if card.get("page") else ""
@@ -4643,11 +4646,13 @@ if not q and st.session_state.get("pending_q"):
 if not chat["messages"] and not q and mode == "feynman":
     st.info(t("feynman_hint"))
 elif not chat["messages"] and not q:
-    st.markdown("**" + t("try_ask") + "**")
-    sg_cols = st.columns(2)
-    for i_, txt_ in enumerate(SUGG[st.session_state.get("ui", "az")][key]):
-        with sg_cols[i_ % 2]:
-            wide(st.button, txt_, key=f"sg_{key}_{i_}", on_click=cb_sugg, args=(txt_,))
+    st.markdown(f'<div class="tk-empty"><div class="tk-empty-mark">T</div><h2>{_e(ct("empty_hello"))}</h2>'
+                f'<p>{_e(t("try_ask"))}</p></div>', unsafe_allow_html=True)
+    with st.container(key="sugg"):
+        sg_cols = st.columns(2)
+        for i_, txt_ in enumerate(SUGG[st.session_state.get("ui", "az")][key]):
+            with sg_cols[i_ % 2]:
+                wide(st.button, txt_, key=f"sg_{key}_{i_}", on_click=cb_sugg, args=(txt_,))
 
 if voice_in:
     with st.expander(t("mic"), expanded=True):
