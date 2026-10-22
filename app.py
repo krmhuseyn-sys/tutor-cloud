@@ -349,7 +349,10 @@ for d in ("memory", "chats", "profiles"):
 @st.cache_resource(show_spinner=False)
 def get_client():
     """Gemini müştərisi proses boyu bir dəfə yaradılır (yenidən-yenidən yaradılması bağlanma xətası verə bilər)."""
-    return genai.Client()
+    try:  # cavab gəlməsə sonsuz gözləməsin: 60 san. sonra xəta verib ehtiyat modelə keçsin
+        return genai.Client(http_options=types.HttpOptions(timeout=60000))
+    except Exception:
+        return genai.Client()
 
 
 @st.cache_resource(show_spinner=False)
@@ -534,7 +537,13 @@ def over_cap(pid):
 def is_busy(e):
     s = str(e)
     return any(w in s for w in ("429", "RESOURCE_EXHAUSTED", "503", "UNAVAILABLE",
-                                "overloaded", "rate_limit", "Rate limit", "529"))
+                                "overloaded", "rate_limit", "Rate limit", "529", "504", "DEADLINE_EXCEEDED"))
+
+
+def is_timeout(e):
+    n = type(e).__name__.lower()
+    s = str(e).lower()
+    return "timeout" in n or "timed out" in s or "timeout" in s or "deadline" in s
 
 
 ERR_LOG = "error_log.jsonl"
@@ -579,13 +588,15 @@ def friendly(e):
         return t("no_provider")
     if s == "CAP":
         return t("cap")
-    if is_busy(e):
+    if is_busy(e) or is_timeout(e):
         return t("busy")
     return t("err") + s[:300]
 
 
 def short_reason(e):
     s = str(e)
+    if is_timeout(e):
+        return "cavab gecikdi (vaxt bitdi)"
     if is_busy(e):
         return "yüklüdür və ya limit (429/503)"
     if "model_not_found" in s or "404" in s:
@@ -609,11 +620,15 @@ def openai_client(pid):
     cfg = PROVIDERS[pid]
     if OpenAI is None or not os.getenv(cfg["env"]):
         return None
-    return OpenAI(api_key=os.getenv(cfg["env"]), base_url=cfg["base"])
+    try:
+        return OpenAI(api_key=os.getenv(cfg["env"]), base_url=cfg["base"], timeout=45.0, max_retries=1)
+    except TypeError:
+        return OpenAI(api_key=os.getenv(cfg["env"]), base_url=cfg["base"])
 
 
 MODEL_CACHE_FILE = "models_cache.json"
 MODEL_CACHE_TTL = 12 * 3600
+GEMINI_THINK = int(os.getenv("GEMINI_THINKING", "0"))  # 0 = söndürülü (sürətli), -1 = model özü seçsin
 GEMINI_BACKUP_MODEL = os.getenv("GEMINI_BACKUP_MODEL", "gemini-flash-lite-latest")
 
 
@@ -668,23 +683,39 @@ def gemini_stream(system, msgs, temp, web, media=None):
     kwargs = dict(system_instruction=system, temperature=temp)
     if web:
         kwargs["tools"] = [types.Tool(google_search=types.GoogleSearch())]
-    cfg = types.GenerateContentConfig(**kwargs)
+    cfg_plain = types.GenerateContentConfig(**kwargs)
+    cfg = cfg_plain
+    if GEMINI_THINK >= 0:  # "düşünmə" rejimi ilk sözü bir neçə saniyə gecikdirir: söndürülür
+        try:
+            cfg = types.GenerateContentConfig(
+                **kwargs, thinking_config=types.ThinkingConfig(thinking_budget=GEMINI_THINK))
+        except Exception:
+            cfg = cfg_plain
     models = [resolve_model("gemini"), GEMINI_BACKUP_MODEL]
     last = None
     for attempt, model in enumerate(models):
         started = False
-        try:
-            count_call("gemini")
-            for ch in client.models.generate_content_stream(model=model, contents=contents, config=cfg):
-                if ch.text:
-                    started = True
-                    yield ch.text
-            return
-        except Exception as e:
-            if started or not is_busy(e):
-                raise
-            last = e
-            time.sleep(2)
+        for use_cfg in ([cfg, cfg_plain] if cfg is not cfg_plain else [cfg_plain]):
+            try:
+                count_call("gemini")
+                for ch in client.models.generate_content_stream(model=model, contents=contents, config=use_cfg):
+                    if ch.text:
+                        started = True
+                        yield ch.text
+                return
+            except Exception as e:
+                if started:
+                    raise
+                if use_cfg is not cfg_plain and not is_busy(e) and not is_timeout(e) \
+                        and ("thinking" in str(e).lower() or "INVALID_ARGUMENT" in str(e) or "400" in str(e)):
+                    continue  # bu model düşünmə ayarını qəbul etmir: ayarsız yenidən cəhd
+                if not (is_busy(e) or is_timeout(e)):
+                    raise
+                last = e
+                break
+        else:
+            continue
+        time.sleep(1)
     if last:
         raise last
 
@@ -712,7 +743,7 @@ def openai_stream(pid, system, msgs, temp):
             break
         except Exception as e:
             s = str(e)
-            if is_busy(e) or any(c in s for c in ("401", "402", "403")):
+            if is_busy(e) or is_timeout(e) or any(c in s for c in ("401", "402", "403")):
                 raise
             last = e
     if stream is None:
