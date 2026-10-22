@@ -45,6 +45,7 @@ _T.update({
     # --- ulduz və qovluqlar
     "f_all": ("Bütün söhbətlər", "All chats", "Все чаты"),
     "f_star": ("⭐ Seçilmişlər", "⭐ Starred", "⭐ Избранные"),
+    "exp_title": ("Yüklə", "Export", "Экспорт"),
     "f_manage": ("📁 Qovluqlar", "📁 Folders", "📁 Папки"),
     "f_move": ("Bu söhbət hansı qovluqda?", "Folder for this chat", "Папка для этого чата"),
     "f_none": ("Qovluqsuz", "No folder", "Без папки"),

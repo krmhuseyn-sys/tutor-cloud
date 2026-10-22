@@ -4862,29 +4862,6 @@ if q:
 with list_box:
     st.subheader(t("chats"))
     wide(st.button, t("new_chat"), key="new_chat_btn", on_click=cb_new)
-    if chat["messages"]:
-        wide(st.download_button, ct("dl_chat"), data=chat_md(chat, key), file_name="tutor_soxbet.md",
-             mime="text/markdown", key="dl_chat_btn")
-        _sig = (st.session_state.cid, len(chat["messages"]))
-        _pb = st.session_state.get("pdf_blob")
-        if _pb and _pb[0] == _sig:
-            wide(st.download_button, ct("pdf_dl"), data=_pb[1], file_name="tutor_soxbet.pdf",
-                 mime="application/pdf", key="dl_pdf_btn")
-        else:
-            wide(st.button, ct("pdf_prep"), key="pdf_prep_btn", on_click=cb_pdf, args=(chat, key, _sig))
-        if st.session_state.pop("pdf_err", None):
-            st.caption(ct("pdf_fail"))
-        _tex = []
-        for _m in chat["messages"]:
-            if _m.get("role") == "assistant":
-                for _f_ in pdfexp.extract_latex(_m.get("content", "")):
-                    if _f_ not in _tex:
-                        _tex.append(_f_)
-        if _tex:
-            with st.expander(ct("tex_title", n=len(_tex))):
-                st.caption(ct("tex_hint"))
-                for _f_ in _tex[:30]:
-                    st.code(_f_, language="latex")
     chat_q = st.text_input("chat_q", key="chat_q", placeholder=t("chat_search"), label_visibility="collapsed",
                            max_chars=80).strip()
     chats = chat_list(key, fresh=bool(st.session_state.pop("_cl_fresh", False)))
@@ -4901,21 +4878,26 @@ with list_box:
         st.caption(t("no_chats"))
     _meta, _fl = cmeta(S), folders(S)
     _all_chats = list(chats)
-    if _fl or any(m_.get("s") for m_ in _meta.values()):
+    _has_f = bool(_fl or any(m_.get("s") for m_ in _meta.values()))
+    if _has_f:
         _opts = ["all", "star"] + _fl
         if st.session_state.get("cf_sel") not in _opts:
             st.session_state["cf_sel"] = "all"
-        st.selectbox("cf_sel", _opts, key="cf_sel", label_visibility="collapsed",
-                     format_func=lambda v: ct("f_all") if v == "all" else ct("f_star") if v == "star" else v)
     else:
         st.session_state["cf_sel"] = "all"
+    _fc = hcols("fbar", [1, 1]) if _has_f else [None, st.container()]
+    if _has_f:
+        with _fc[0]:
+            st.selectbox("cf_sel", _opts, key="cf_sel", label_visibility="collapsed",
+                         format_func=lambda v: ct("f_all") if v == "all" else ct("f_star") if v == "star" else v)
     _f = st.session_state.get("cf_sel", "all")
     if _f == "star":
         chats = [c for c in chats if _meta.get(c["id"], {}).get("s")]
     elif _f != "all":
         chats = [c for c in chats if _meta.get(c["id"], {}).get("f") == _f]
     chats = sorted(chats, key=lambda c: 0 if _meta.get(c["id"], {}).get("s") else 1)  # ulduzlular yuxarıda
-    with st.popover(ct("f_manage"), use_container_width=True):
+    with _fc[1]:
+      with st.popover(ct("f_manage"), use_container_width=True):
         _cur = st.session_state.cid
         if _cur and any(c_["id"] == _cur for c_ in _all_chats):
             st.session_state[f"mv_{_cur}"] = _meta.get(_cur, {}).get("f", "") if _meta.get(_cur, {}).get("f") in _fl else ""
@@ -4938,3 +4920,28 @@ with list_box:
                       on_click=cb_star, args=(c["id"],))
         with c3:
             st.button("×", key=f"del_{c['id']}", help=t("delete"), on_click=cb_delete, args=(key, c["id"]))
+
+    if chat["messages"]:
+        with st.popover(ct("exp_title"), use_container_width=True):
+            wide(st.download_button, ct("dl_chat"), data=chat_md(chat, key), file_name="tutor_soxbet.md",
+                 mime="text/markdown", key="dl_chat_btn")
+            _sig = (st.session_state.cid, len(chat["messages"]))
+            _pb = st.session_state.get("pdf_blob")
+            if _pb and _pb[0] == _sig:
+                wide(st.download_button, ct("pdf_dl"), data=_pb[1], file_name="tutor_soxbet.pdf",
+                     mime="application/pdf", key="dl_pdf_btn")
+            else:
+                wide(st.button, ct("pdf_prep"), key="pdf_prep_btn", on_click=cb_pdf, args=(chat, key, _sig))
+            if st.session_state.pop("pdf_err", None):
+                st.caption(ct("pdf_fail"))
+            _tex = []
+            for _m in chat["messages"]:
+                if _m.get("role") == "assistant":
+                    for _f_ in pdfexp.extract_latex(_m.get("content", "")):
+                        if _f_ not in _tex:
+                            _tex.append(_f_)
+            if _tex:
+                with st.expander(ct("tex_title", n=len(_tex))):
+                    st.caption(ct("tex_hint"))
+                    for _f_ in _tex[:30]:
+                        st.code(_f_, language="latex")
