@@ -4574,12 +4574,13 @@ key = st.sidebar.selectbox(t("subject"), SUBJ_KEYS, format_func=subj_name)
 _MODES = ["learn", "practice", "exam", "feynman"]
 if st.session_state.get("mode_sel") not in _MODES:
     st.session_state["mode_sel"] = "learn"
-st.sidebar.markdown(f'<div class="sb-label">{_e(t("mode"))}</div>', unsafe_allow_html=True)
-_mode_cols = st.sidebar.columns(2)
-for _n, _m in enumerate(_MODES):
-    with _mode_cols[_n % 2]:
-        wide(st.button, t("m_" + _m), key=f"mode_{_m}",
-             type="primary" if st.session_state["mode_sel"] == _m else "secondary", on_click=cb_mode, args=(_m,))
+if view == "chat":  # rejim yalnız söhbətə aiddir; başqa səhifələrdə göstərilmir (iki yerdə yaşıl yanmasın)
+    st.sidebar.markdown(f'<div class="sb-label">{_e(t("mode"))}</div>', unsafe_allow_html=True)
+    _mode_cols = st.sidebar.columns(2)
+    for _n, _m in enumerate(_MODES):
+        with _mode_cols[_n % 2]:
+            wide(st.button, t("m_" + _m), key=f"mode_{_m}",
+                 type="primary" if st.session_state["mode_sel"] == _m else "secondary", on_click=cb_mode, args=(_m,))
 mode = st.session_state["mode_sel"]
 
 avail_ids = [p for p in PROVIDERS if available(p) and (IS_OWNER or PROVIDERS[p]["free"])]
