@@ -667,6 +667,10 @@ html {{ -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility; }
 }}
 .stApp .tk-empty h2 {{ font-size:clamp(24px, 4.5vw, 34px); font-weight:600; margin:0 0 6px; padding:0; }}
 .tk-empty p {{ color:var(--tk-muted) !important; margin:0; font-size:15.5px; }}
+.stApp .st-key-sugg[data-testid="stVerticalBlock"], .stApp .st-key-sugg > [data-testid="stVerticalBlock"] {{ display:grid !important; grid-template-columns:1fr 1fr; gap:.75rem !important; align-items:stretch; }}
+.stApp .st-key-sugg [data-testid="stElementContainer"], .stApp .st-key-sugg [data-testid="stButton"] {{ width:100% !important; height:100%; }}
+.stApp .st-key-sugg button[data-testid^="stBaseButton"] {{ height:100%; }}
+@media (max-width:640px) {{ .stApp .st-key-sugg[data-testid="stVerticalBlock"], .stApp .st-key-sugg > [data-testid="stVerticalBlock"] {{ grid-template-columns:1fr; }} }}
 .stApp .st-key-sugg button[data-testid^="stBaseButton"] {{
   min-height:74px; justify-content:flex-start !important; text-align:left; padding:14px 18px !important;
   border-radius:18px !important; background:color-mix(in srgb, var(--tk-surface) 88%, transparent) !important;

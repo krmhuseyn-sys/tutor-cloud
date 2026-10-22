@@ -371,7 +371,13 @@ db = get_db()
 USAGE = "usage.json"
 
 st.set_page_config(page_title="Tutor Komandam", layout="wide")
-st.session_state.setdefault("ui", st.session_state.get("ui_keep", "az"))
+try:
+    _ql = st.query_params.get("lang")
+except Exception:
+    _ql = None
+st.session_state.setdefault("ui", st.session_state.get("ui_keep") or (_ql if _ql in ("az", "en", "ru") else "az"))
+if st.session_state["ui"] not in TXT:
+    st.session_state["ui"] = "az"
 st.session_state["ui_keep"] = st.session_state["ui"]  # giriş səhifəsindəki radio yox olsa da dil qalsın
 st.session_state.setdefault("cid", None)
 st.session_state.setdefault("mic_n", 0)
@@ -1636,6 +1642,16 @@ def sc(method, *args, default=None):
 def cb_ui(v):
     st.session_state["ui"] = v
     st.session_state["ui_keep"] = v
+    try:
+        st.query_params["lang"] = v  # bağlantı qopub səhifə yenilənəndə dil qalsın
+    except Exception:
+        pass
+    try:
+        if AUTH_ON and st.session_state.get("user"):
+            get_prefs(S).setdefault("view", {})["ui"] = v
+            save_prefs(S)
+    except Exception:
+        pass
 
 
 def lang_picker():
@@ -4530,6 +4546,9 @@ def cb_mode(v):
 
 if "fs_sel" not in st.session_state:
     _vp = get_prefs(S).get("view") or {}
+    if not _ql and _vp.get("ui") in TXT and st.session_state.get("ui") != _vp.get("ui"):
+        st.session_state["ui"] = st.session_state["ui_keep"] = _vp["ui"]
+        st.rerun()
     st.session_state["fs_sel"] = _vp.get("fs") if _vp.get("fs") in FS_PX else "m"
     st.session_state["rd_mode"] = bool(_vp.get("read"))
     st.session_state["ff_sel"] = _vp.get("font") if _vp.get("font") in FONT_OPT else "default"
@@ -4694,10 +4713,8 @@ elif not chat["messages"] and not q:
     st.markdown(f'<div class="tk-empty"><div class="tk-empty-mark">T</div><h2>{_e(ct("empty_hello"))}</h2>'
                 f'<p>{_e(t("try_ask"))}</p></div>', unsafe_allow_html=True)
     with st.container(key="sugg"):
-        sg_cols = st.columns(2)
         for i_, txt_ in enumerate(SUGG[st.session_state.get("ui", "az")][key]):
-            with sg_cols[i_ % 2]:
-                wide(st.button, txt_, key=f"sg_{key}_{i_}", on_click=cb_sugg, args=(txt_,))
+            wide(st.button, txt_, key=f"sg_{key}_{i_}", on_click=cb_sugg, args=(txt_,))
 
 if voice_in:
     with st.expander(t("mic"), expanded=True):
