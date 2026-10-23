@@ -626,6 +626,16 @@ class SupabaseStore:
         res = self._db().rpc("username_available", {"p_name": name}).execute()
         return bool(res.data)
 
+    def change_username(self, name):
+        """72 saatda bir dəfə ad dəyişmə (qayda bazada yoxlanılır). Qaytarır: {'ok': bool, 'error'?, 'retry_at'?, 'next_at'?}."""
+        res = self._db().rpc("change_username", {"p_name": (name or "").strip().lower()[:20]}).execute()
+        return res.data if isinstance(res.data, dict) else {"ok": False, "error": "unknown"}
+
+    def username_next_change(self):
+        """Növbəti ad dəyişməsinin mümkün olduğu vaxt (ISO) və ya None."""
+        res = self._db().rpc("username_next_change").execute()
+        return res.data or None
+
     def create_profile(self, username, theme="teal"):
         row = {"id": self.user_id, "username": username, "theme": theme}
         try:

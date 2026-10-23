@@ -3771,6 +3771,83 @@ SB_CSS = """<style>
 </style>"""
 
 
+def _remaining_txt(iso):
+    """ISO vaxtına qədər qalan müddət ('2 gün 5 saat'); keçibsə boş sətir."""
+    if not iso:
+        return ""
+    try:
+        s_ = re.sub(r"(\.\d{1,6})\d*", lambda m: m.group(1).ljust(7, "0"), str(iso)).replace("Z", "+00:00")
+        dt_ = datetime.datetime.fromisoformat(s_)
+        if dt_.tzinfo is None:
+            dt_ = dt_.replace(tzinfo=datetime.timezone.utc)
+        secs = int((dt_ - datetime.datetime.now(datetime.timezone.utc)).total_seconds())
+    except Exception:
+        return ""
+    if secs <= 0:
+        return ""
+    d_u, h_u, m_u = ct("un_units").split("|")
+    d_, rem_ = divmod(secs, 86400)
+    h_, rem_ = divmod(rem_, 3600)
+    m_ = -(-rem_ // 60)
+    if m_ == 60:
+        h_, m_ = h_ + 1, 0
+    if h_ == 24:
+        d_, h_ = d_ + 1, 0
+    parts = ([f"{d_} {d_u}"] if d_ else []) + ([f"{h_} {h_u}"] if h_ else []) + ([f"{m_} {m_u}"] if m_ and not d_ else [])
+    return " ".join(parts) or f"1 {m_u}"
+
+
+def username_ui():
+    ss = st.session_state
+    msg_ = ss.pop("un_msg", None)
+    st.caption(ct("un_hint"))
+    if "un_next" not in ss:
+        try:
+            ss["un_next"] = S.username_next_change() or ""
+        except store.SessionExpired:
+            drop_login()
+            st.rerun()
+        except Exception:
+            ss["un_next"] = ""
+            ss["un_nosql"] = True
+    wait_ = _remaining_txt(ss.get("un_next"))
+    if msg_:
+        (st.success if msg_ == "un_ok" else st.error)(ct(msg_))
+    if ss.get("un_nosql") and not wait_:
+        st.caption(ct("un_need_sql"))
+    if wait_:
+        st.info(ct("un_wait", t=wait_))
+    new_ = st.text_input(ct("un_new"), key="un_new", max_chars=20, disabled=bool(wait_))
+    if st.button(ct("un_btn"), key="un_btn", disabled=bool(wait_)):
+        name_ = (new_ or "").strip().lower()
+        if not store.valid_username(name_):
+            ss["un_msg"] = "un_invalid"
+        elif name_ == str(S.username or "").lower():
+            ss["un_msg"] = "un_same"
+        else:
+            try:
+                res_ = S.change_username(name_)
+            except store.SessionExpired:
+                drop_login()
+                st.rerun()
+            except Exception as e:
+                res_ = {"ok": False, "error": "sql" if "change_username" in str(e) else "unknown"}
+                if res_["error"] == "unknown":
+                    st.error(friendly(e))
+            if res_.get("ok"):
+                S.username = res_.get("username") or name_
+                (ss.get("profile") or {})["username"] = S.username
+                ss["un_next"] = res_.get("next_at") or ""
+                ss["un_msg"] = "un_ok"
+            elif res_.get("error") == "cooldown":
+                ss["un_next"] = res_.get("retry_at") or ""
+            elif res_.get("error") in ("taken", "invalid", "same"):
+                ss["un_msg"] = "un_" + res_["error"]
+            elif res_.get("error") == "sql":
+                ss["un_nosql"] = True
+        st.rerun()
+
+
 def account_ui():
     about_new = st.text_area(t("about"), value=ABOUT, max_chars=600, key="about_box")
     if st.button(t("about_save")):
@@ -4306,6 +4383,9 @@ def settings_cat_ui(cat, key, opts, choice):
             sec(ct("set_g_avatar"))
             avatar_ui(_uletter())
         if AUTH_ON:
+            with st.container(border=True):
+                sec(ct("un_title"))
+                username_ui()
             with st.container(border=True):
                 sec(t("account"))
                 account_ui()
