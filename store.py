@@ -210,6 +210,7 @@ class LocalStore:
     email = "local"
     username = "local"
     user_id = "local"
+    msg_enabled = False  # mesajlaşma yalnız Supabase ilə (hesablar lazımdır)
 
     def __init__(self, base="."):
         self.base = base
@@ -635,6 +636,85 @@ class SupabaseStore:
         """Növbəti ad dəyişməsinin mümkün olduğu vaxt (ISO) və ya None."""
         res = self._db().rpc("username_next_change").execute()
         return res.data or None
+
+    # ---- mesajlaşma (messaging.sql lazımdır; bütün qaydalar bazadakı funksiyalarda yoxlanılır)
+    msg_enabled = True
+
+    def _msg(self, fn, args=None):
+        return self._db().rpc(fn, args or {}).execute().data
+
+    def msg_ready(self):
+        """messaging.sql işlədilibmi? (funksiya yoxdursa False)"""
+        try:
+            self._msg("msg_friends_list")
+            return True
+        except SessionExpired:
+            raise
+        except Exception:
+            return False
+
+    def msg_conversations(self):
+        return self._msg("msg_conversations_list") or []
+
+    def msg_fetch(self, conv, after=0):
+        return self._msg("msg_fetch", {"p_conv": conv, "p_after": int(after or 0)}) or []
+
+    def msg_send(self, conv, body):
+        r = self._msg("msg_send", {"p_conv": conv, "p_body": (body or "")[:1000]})
+        return r if isinstance(r, dict) else {"ok": False, "error": "unknown"}
+
+    def msg_delete(self, mid):
+        self._msg("msg_delete_message", {"p_id": int(mid)})
+
+    def msg_create_group(self, name):
+        r = self._msg("msg_create_group", {"p_name": (name or "").strip()[:30]})
+        return r if isinstance(r, dict) else {"ok": False, "error": "unknown"}
+
+    def msg_join_group(self, code):
+        r = self._msg("msg_join_group", {"p_code": (code or "").strip()[:20]})
+        return r if isinstance(r, dict) else {"ok": False, "error": "unknown"}
+
+    def msg_leave_group(self, conv):
+        self._msg("msg_leave_group", {"p_conv": conv})
+
+    def msg_delete_group(self, conv):
+        self._msg("msg_delete_group", {"p_conv": conv})
+
+    def msg_group_remove(self, conv, username):
+        self._msg("msg_group_remove", {"p_conv": conv, "p_username": (username or "").strip()[:20]})
+
+    def msg_members(self, conv):
+        return self._msg("msg_members_list", {"p_conv": conv}) or []
+
+    def msg_friends(self):
+        r = self._msg("msg_friends_list")
+        return r if isinstance(r, dict) else {"friends": [], "incoming": [], "outgoing": [], "blocked": []}
+
+    def msg_friend_request(self, username):
+        r = self._msg("msg_friend_request", {"p_username": (username or "").strip().lower()[:20]})
+        return r if isinstance(r, dict) else {"ok": False, "error": "unknown"}
+
+    def msg_friend_respond(self, username, accept):
+        r = self._msg("msg_friend_respond", {"p_username": (username or "").strip().lower()[:20],
+                                             "p_accept": bool(accept)})
+        return r if isinstance(r, dict) else {"ok": False, "error": "unknown"}
+
+    def msg_friend_remove(self, username):
+        self._msg("msg_friend_remove", {"p_username": (username or "").strip().lower()[:20]})
+
+    def msg_block(self, username, flag=True):
+        self._msg("msg_set_block", {"p_username": (username or "").strip().lower()[:20], "p_flag": bool(flag)})
+
+    def msg_report(self, mid, reason=""):
+        r = self._msg("msg_report", {"p_message_id": int(mid), "p_reason": (reason or "")[:300]})
+        return r if isinstance(r, dict) else {"ok": False, "error": "unknown"}
+
+    def owner_msg_reports(self):
+        return self._msg("owner_msg_reports") or []
+
+    def owner_msg_resolve(self, rid, action):
+        r = self._msg("owner_msg_resolve", {"p_id": int(rid), "p_action": "block" if action == "block" else "dismiss"})
+        return r if isinstance(r, dict) else {"ok": False}
 
     def create_profile(self, username, theme="teal"):
         row = {"id": self.user_id, "username": username, "theme": theme}

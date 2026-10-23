@@ -3325,6 +3325,7 @@ def owner_page(S_):
         user_rows(users)
     owner_feedback_ui(S_)
     owner_access_ui(S_)
+    owner_msg_reports_ui(S_)
 
 
 # ======================= PLAN: imtahan tarixinə qədər + xülasə və mövzu xəritəsi =======================
@@ -4623,6 +4624,336 @@ def memory_page(key):
             st.text(raw_mem)
 
 
+# ======================= MESAJLAR: qruplar, dostlar, söhbət =======================
+MSG_CSS = """<style>
+.msg-wrap{display:flex;flex-direction:column;gap:6px;padding:4px 2px}
+.msg-b{max-width:80%;padding:8px 12px;border-radius:16px;background:var(--tk-surface2);border:1px solid var(--tk-border);color:var(--tk-text);overflow-wrap:anywhere;line-height:1.35}
+.msg-b.me{align-self:flex-end;background:linear-gradient(135deg,var(--tk-accent),color-mix(in srgb,var(--tk-accent) 62%,var(--tk-accent2)));border-color:transparent;color:var(--tk-on)}
+.msg-b small{display:block;font-size:.72rem;opacity:.7}
+.msg-b.me small{text-align:right}
+</style>"""
+_BAKU = datetime.timezone(datetime.timedelta(hours=4))
+
+
+def msg_err(code):
+    k = "m_e_" + re.sub(r"[^a-z_]", "", str(code or "unknown"))
+    s_ = ct(k)
+    return ct("m_e_unknown") if s_ == k else s_
+
+
+def msg_time(iso):
+    try:
+        s_ = re.sub(r"\.\d+", "", str(iso)).replace("Z", "+00:00")
+        d = datetime.datetime.fromisoformat(s_)
+        if d.tzinfo is None:
+            d = d.replace(tzinfo=datetime.timezone.utc)
+        d = d.astimezone(_BAKU)
+        return d.strftime("%H:%M") if d.date() == datetime.datetime.now(_BAKU).date() else d.strftime("%d.%m %H:%M")
+    except Exception:
+        return ""
+
+
+def msg_html(m):
+    body = _e(m.get("body", "")).replace("\n", "<br>")
+    mine = bool(m.get("mine"))
+    who = "" if mine else f'<small>@{_e(m.get("username", ""))}</small>'
+    return (f'<div class="msg-b{" me" if mine else ""}">{who}{body}'
+            f'<small>{_e(msg_time(m.get("at")))}</small></div>')
+
+
+def cb_msg_open(cid):
+    st.session_state["msg_conv"] = cid
+    if cid:
+        st.session_state.pop("mb_" + cid, None)
+    st.session_state.pop("m_leave_ask", None)
+
+
+def cb_msg_tab(tb):
+    st.session_state["m_tab"] = tb
+
+
+def msg_flash(txt, ok=True):
+    st.session_state["m_flash"] = (txt, bool(ok))
+
+
+@st.fragment(run_every=6)
+def msg_feed(S_, conv):
+    """Mesajlar bir neçə saniyədən bir yenilənir: yalnız yeni mesajlar çəkilir. Ən yenisi yuxarıdadır."""
+    bk = "mb_" + conv
+    buf = st.session_state.get(bk)
+    offline = False
+    try:
+        last = buf[-1]["id"] if buf else 0
+        new = S_.msg_fetch(conv, last) or []
+        buf = new if buf is None else (buf + new)[-200:]
+    except store.SessionExpired:
+        drop_login()
+        st.rerun()
+        return
+    except Exception:
+        offline = True
+        buf = buf or []
+    st.session_state[bk] = buf
+    with st.container(height=460, border=True):
+        if not buf:
+            st.caption(ct("m_empty"))
+        else:
+            st.markdown(MSG_CSS + '<div class="msg-wrap">' + "".join(msg_html(m) for m in reversed(buf)) + "</div>",
+                        unsafe_allow_html=True)
+    if offline:
+        st.caption(ct("m_offline"))
+
+
+def msg_actions(S_, info, buf):
+    """Şikayət, bloklama, öz mesajını silmə."""
+    others = [m for m in reversed(buf or []) if not m.get("mine")][:30]
+    mine = [m for m in reversed(buf or []) if m.get("mine")][:15]
+    with st.expander(ct("m_more")):
+        if others:
+            lab = {m["id"]: f"@{m.get('username', '')}: {str(m.get('body', ''))[:40]}" for m in others}
+            pick = st.selectbox(ct("m_pick"), [m["id"] for m in others], format_func=lambda i: lab.get(i, ""),
+                                key="m_pick_o_" + info["id"])
+            reason = st.text_input(ct("m_reason"), max_chars=300, key="m_reason_" + info["id"])
+            c1, c2 = st.columns(2)
+            if wide(c1.button, ct("m_report"), key="m_do_report"):
+                r = sc(S_.msg_report, pick, reason, default={}) or {}
+                st.success(ct("m_reported")) if r.get("ok") else st.warning(msg_err(r.get("error")))
+            if wide(c2.button, ct("m_block_author"), key="m_do_block_a"):
+                who = next((m.get("username") for m in others if m["id"] == pick), "")
+                sc(S_.msg_block, who, True)
+                st.session_state.pop("mb_" + info["id"], None)
+                st.rerun()
+        if mine:
+            lab2 = {m["id"]: str(m.get("body", ""))[:50] for m in mine}
+            p2 = st.selectbox(ct("m_pick_mine"), [m["id"] for m in mine], format_func=lambda i: lab2.get(i, ""),
+                              key="m_pick_m_" + info["id"])
+            if wide(st.button, ct("m_del_mine"), key="m_do_del"):
+                sc(S_.msg_delete, p2)
+                st.session_state.pop("mb_" + info["id"], None)
+                st.rerun()
+
+
+def msg_conv_view(S_, info):
+    cid = info["id"]
+    is_group = info.get("kind") == "group"
+    h1, h2 = hcols("m_head", [1, 3])
+    with h1:
+        wide(st.button, ct("m_back"), key="m_back", on_click=cb_msg_open, args=(None,))
+    with h2:
+        st.markdown(f"**{'#' if is_group else '@'}{_e(info.get('name') or '')}**")
+    if is_group and info.get("code"):
+        st.caption(ct("m_invite"))
+        st.code(info["code"])
+    txt = st.chat_input(ct("m_input"), max_chars=1000, key="m_chat_in")
+    if txt and txt.strip():
+        r = sc(S_.msg_send, cid, txt.strip(), default={}) or {}
+        if not r.get("ok"):
+            st.toast(msg_err(r.get("error")))
+    msg_feed(S_, cid)
+    st.caption(ct("m_live"))
+    msg_actions(S_, info, st.session_state.get("mb_" + cid))
+    if is_group:
+        if st.toggle(ct("m_members"), key="m_show_members_" + cid):
+            mem = sc(S_.msg_members, cid, default=[]) or []
+            st.markdown(", ".join(f"@{_e(x.get('username', ''))}" + (" *" if x.get("role") == "owner" else "")
+                                  for x in mem))
+            if info.get("role") == "owner":
+                names = [x.get("username") for x in mem if x.get("role") != "owner"]
+                if names:
+                    who = st.selectbox(ct("m_kick"), names, key="m_kick_" + cid)
+                    if wide(st.button, ct("m_kick_btn"), key="m_kick_do"):
+                        sc(S_.msg_group_remove, cid, who)
+                        st.rerun()
+        if st.session_state.get("m_leave_ask") == cid:
+            st.warning(ct("m_delete_ask") if info.get("role") == "owner" else ct("m_leave_ask"))
+            y, n = st.columns(2)
+            if wide(y.button, ct("m_yes"), key="m_leave_yes"):
+                sc(S_.msg_leave_group, cid)
+                cb_msg_open(None)
+                st.rerun()
+            if info.get("role") == "owner" and wide(y.button, ct("m_delete_group"), key="m_del_group"):
+                sc(S_.msg_delete_group, cid)
+                cb_msg_open(None)
+                st.rerun()
+            wide(n.button, ct("m_no"), key="m_leave_no", on_click=lambda: st.session_state.pop("m_leave_ask", None))
+        else:
+            wide(st.button, ct("m_leave"), key="m_leave", on_click=lambda: st.session_state.update(m_leave_ask=cid))
+    else:
+        if wide(st.button, ct("m_block"), key="m_block_dm"):
+            sc(S_.msg_block, info.get("name"), True)
+            cb_msg_open(None)
+            st.rerun()
+
+
+def msg_chats_tab(S_, convs):
+    with st.container(border=True):
+        sec(ct("m_new_group"))
+        with st.form("m_new_form", clear_on_submit=True):
+            nm = st.text_input(ct("m_group_name"), max_chars=30, key="m_new_name")
+            go = st.form_submit_button(ct("m_create"))
+        if go:
+            r = sc(S_.msg_create_group, nm, default={}) or {}
+            if r.get("ok"):
+                msg_flash(ct("m_created", code=r.get("code", "")))
+                cb_msg_open(r.get("id"))
+                st.rerun()
+            st.warning(msg_err(r.get("error")))
+    with st.container(border=True):
+        sec(ct("m_join_title"))
+        with st.form("m_join_form", clear_on_submit=True):
+            cd = st.text_input(ct("m_code"), max_chars=20, key="m_join_code")
+            go2 = st.form_submit_button(ct("m_join"))
+        if go2:
+            r = sc(S_.msg_join_group, cd, default={}) or {}
+            if r.get("ok"):
+                cb_msg_open(r.get("id"))
+                st.rerun()
+            st.warning(msg_err(r.get("error")))
+    if not convs:
+        st.caption(ct("m_none"))
+    for c in convs:
+        un = int(c.get("unread") or 0)
+        pre = "#" if c.get("kind") == "group" else "@"
+        label = f"{pre}{c.get('name') or ''}" + (f"   ({un})" if un else "")
+        wide(st.button, label, key="m_open_" + c["id"], type="primary" if un else "secondary",
+             on_click=cb_msg_open, args=(c["id"],))
+        if c.get("last_body"):
+            st.caption(str(c["last_body"])[:80])
+
+
+def msg_friends_tab(S_):
+    fr = sc(S_.msg_friends, default={}) or {}
+    with st.container(border=True):
+        sec(ct("m_f_add"))
+        with st.form("m_fadd_form", clear_on_submit=True):
+            un = st.text_input(ct("m_f_user"), max_chars=20, key="m_fadd_name")
+            go = st.form_submit_button(ct("m_f_send"))
+        if go and un.strip():
+            r = sc(S_.msg_friend_request, un, default={}) or {}
+            if r.get("ok"):
+                msg_flash(ct("m_f_acc_done") if r.get("accepted") else ct("m_f_sent"))
+                st.rerun()
+            st.warning(msg_err(r.get("error")))
+    inc = fr.get("incoming") or []
+    if inc:
+        sec(ct("m_f_in"))
+        for u in inc:
+            a, b, c = hcols("m_in_" + u, [3, 2, 2])
+            a.markdown(f"@{_e(u)}")
+            if wide(b.button, ct("m_accept"), key="m_acc_" + u, type="primary"):
+                sc(S_.msg_friend_respond, u, True)
+                st.rerun()
+            if wide(c.button, ct("m_decline"), key="m_dec_" + u):
+                sc(S_.msg_friend_respond, u, False)
+                st.rerun()
+    out = fr.get("outgoing") or []
+    if out:
+        sec(ct("m_f_out"))
+        for u in out:
+            a, b = hcols("m_out_" + u, [3, 2])
+            a.markdown(f"@{_e(u)}")
+            if wide(b.button, ct("m_cancel_req"), key="m_cx_" + u):
+                sc(S_.msg_friend_remove, u)
+                st.rerun()
+    sec(ct("m_f_list"))
+    fl = fr.get("friends") or []
+    if not fl:
+        st.caption(ct("m_f_none"))
+    for f in fl:
+        u = f.get("username") or ""
+        a, b, c, d = hcols("m_fr_" + u, [3, 2, 2, 2])
+        a.markdown(f"@{_e(u)}")
+        if f.get("dm") and wide(b.button, ct("m_write"), key="m_wr_" + u, type="primary",
+                                on_click=cb_msg_open, args=(f["dm"],)):
+            pass
+        if wide(c.button, ct("m_remove"), key="m_rm_" + u):
+            sc(S_.msg_friend_remove, u)
+            st.rerun()
+        if wide(d.button, ct("m_block"), key="m_bl_" + u):
+            sc(S_.msg_block, u, True)
+            st.rerun()
+    bl = fr.get("blocked") or []
+    if bl:
+        sec(ct("m_blocked"))
+        for u in bl:
+            a, b = hcols("m_blk_" + u, [3, 2])
+            a.markdown(f"@{_e(u)}")
+            if wide(b.button, ct("m_unblock"), key="m_ub_" + u):
+                sc(S_.msg_block, u, False)
+                st.rerun()
+
+
+def messages_page(S_):
+    dash_css()
+    st.title(ct("m_title"))
+    if not getattr(S_, "msg_enabled", False):
+        st.info(ct("m_local"))
+        return
+    if "msg_ready" not in st.session_state:
+        st.session_state["msg_ready"] = bool(sc(S_.msg_ready, default=False))
+    if not st.session_state["msg_ready"]:
+        st.warning(ct("m_need_sql"))
+        if st.button(ct("m_retry"), key="m_retry"):
+            st.session_state.pop("msg_ready", None)
+            st.rerun()
+        return
+    fl = st.session_state.pop("m_flash", None)
+    if fl:
+        (st.success if fl[1] else st.warning)(fl[0])
+    st.caption(ct("m_priv"))
+    convs = sc(S_.msg_conversations, default=[]) or []
+    cur = st.session_state.get("msg_conv")
+    info = next((c for c in convs if c.get("id") == cur), None) if cur else None
+    if cur and info is None:  # söhbət silinib / çıxılıb
+        st.session_state["msg_conv"] = None
+    if info is not None:
+        msg_conv_view(S_, info)
+        return
+    tab = st.session_state.get("m_tab", "chats")
+    t1, t2 = hcols("m_tabs", 2)
+    with t1:
+        wide(st.button, ct("m_tab_chats"), key="m_tab_c", type="primary" if tab == "chats" else "secondary",
+             on_click=cb_msg_tab, args=("chats",))
+    with t2:
+        wide(st.button, ct("m_tab_friends"), key="m_tab_f", type="primary" if tab == "friends" else "secondary",
+             on_click=cb_msg_tab, args=("friends",))
+    if tab == "friends":
+        msg_friends_tab(S_)
+    else:
+        msg_chats_tab(S_, convs)
+
+
+def owner_msg_reports_ui(S_):
+    """Sahib: şikayət olunan yazışmaların son hissəsi (yalnız şikayət olunanda bazaya düşür)."""
+    if not getattr(S_, "msg_enabled", False):
+        return
+    sec(ct("m_o_title"))
+    try:
+        reps = S_.owner_msg_reports()
+    except store.SessionExpired:
+        drop_login()
+        st.rerun()
+        return
+    except Exception:
+        st.caption(ct("m_o_need_sql"))
+        return
+    if not reps:
+        st.caption(ct("m_o_none"))
+        return
+    for r in reps:
+        head = f"@{r.get('reporter') or '?'} -> @{r.get('reported') or '?'}"
+        with st.expander(f"{head}: {str(r.get('reason') or '')[:50]}"):
+            for x in r.get("snapshot") or []:
+                st.text(f"{x.get('username', '')}: {str(x.get('body', ''))[:300]}")
+            a, b = st.columns(2)
+            if wide(a.button, ct("m_o_dismiss"), key=f"m_rd_{r['id']}"):
+                sc(S_.owner_msg_resolve, r["id"], "dismiss")
+                st.rerun()
+            if wide(b.button, ct("m_o_block"), key=f"m_rb_{r['id']}", type="primary"):
+                sc(S_.owner_msg_resolve, r["id"], "block")
+                st.rerun()
+
+
 def cb_choice():
     st.session_state["set_choice"] = st.session_state.get("w_choice", "smart")
 
@@ -4669,7 +5000,8 @@ if _rc:
     st.markdown(_rc, unsafe_allow_html=True)  # əsas hissədə də: yan panel bağlı olanda belə şrift tətbiq olunsun
 
 # bölmələr: 2 sütunlu düymə şəbəkəsi, aktiv olan tema rəngində dolu
-_views = ["chat", "cards", "plan", "stats"] + (["owner"] if (AUTH_ON and IS_OWNER) else [])
+_views = (["chat", "cards", "plan", "stats"] + (["msgs"] if (AUTH_ON and getattr(S, "msg_enabled", False)) else [])
+          + (["owner"] if (AUTH_ON and IS_OWNER) else []))
 _foot_views = ["settings", "memory"]  # yan panelin aşağı hissəsində
 if st.session_state.get("view") not in _views + _foot_views:
     st.session_state["view"] = "chat"
@@ -4728,6 +5060,9 @@ if view == "plan":
     st.stop()
 if view == "stats":
     dashboard_page(S)
+    st.stop()
+if view == "msgs":
+    messages_page(S)
     st.stop()
 if view == "owner" and AUTH_ON and IS_OWNER:
     owner_page(S)
