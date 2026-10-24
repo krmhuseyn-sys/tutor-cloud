@@ -266,6 +266,30 @@ def longest_streak(activity):
     return best
 
 
+# ---------------------------- dəftər / sınaq imtahanı ----------------------------
+SAVED_MAX = 500          # dəftərdə ən çox cavab (bütün fənlər)
+SAMPLES_MAX = 8          # hər fənn üçün ən çox imtahan nümunəsi
+SAMPLE_MAX_CHARS = 30000
+
+
+def _clean_sources(sources):
+    """Mənbələrdən yalnız lazım olan sahələr (ölçü kiçik qalsın)."""
+    out = []
+    for x in list(sources or [])[:12]:
+        if isinstance(x, dict):
+            out.append({"src": str(x.get("src", ""))[:120], "page": x.get("page"),
+                        "text": str(x.get("text", ""))[:300], "note": bool(x.get("note"))})
+    return out
+
+
+def _local_subjects(base, folder):
+    d = os.path.join(base, folder)
+    try:
+        return [f[:-5] for f in os.listdir(d) if f.endswith(".json")]
+    except Exception:
+        return []
+
+
 # ---------------------------- yerli saxlama ----------------------------
 class LocalStore:
     kind = "local"
@@ -579,6 +603,70 @@ class LocalStore:
         rows = [r for r in self._notes_load(key) if r.get("name") != name]
         with open(self._notes_path(key), "w", encoding="utf-8") as f:
             json.dump(rows, f, ensure_ascii=False)
+
+    # ---- dəftər (saxlanmış cavablar) və sınaq imtahanı nümunələri
+    def _json_path(self, folder, key):
+        os.makedirs(os.path.join(self.base, folder), exist_ok=True)
+        return os.path.join(self.base, folder, f"{key}.json")
+
+    def _json_load(self, folder, key):
+        try:
+            with open(self._json_path(folder, key), encoding="utf-8") as f:
+                rows = json.load(f)
+            return rows if isinstance(rows, list) else []
+        except Exception:
+            return []
+
+    def _json_save(self, folder, key, rows):
+        with open(self._json_path(folder, key), "w", encoding="utf-8") as f:
+            json.dump(rows, f, ensure_ascii=False)
+
+    def saved_list(self, key):
+        return sorted(self._json_load("saved", key), key=lambda r: r.get("created_at", ""), reverse=True)
+
+    def saved_add(self, key, chat_id, idx, question, answer, sources=None):
+        rows = self._json_load("saved", key)
+        if any(r.get("chat_id") == chat_id and r.get("idx") == idx for r in rows):
+            return "dup"
+        total = sum(len(self._json_load("saved", k)) for k in _local_subjects(self.base, "saved"))
+        if total >= SAVED_MAX:
+            return -1
+        row = {"id": uuid.uuid4().hex, "subject": key, "chat_id": str(chat_id)[:80], "idx": int(idx),
+               "question": str(question or "")[:2000], "answer": str(answer)[:20000],
+               "sources": _clean_sources(sources), "note": "",
+               "created_at": datetime.datetime.now(datetime.timezone.utc).isoformat()}
+        rows.append(row)
+        self._json_save("saved", key, rows)
+        return row["id"]
+
+    def saved_delete(self, key, item_id):
+        self._json_save("saved", key, [r for r in self._json_load("saved", key) if r.get("id") != item_id])
+
+    def saved_delete_at(self, key, chat_id, idx):
+        self._json_save("saved", key, [r for r in self._json_load("saved", key)
+                                       if not (r.get("chat_id") == chat_id and r.get("idx") == idx)])
+
+    def saved_note(self, key, item_id, note):
+        rows = self._json_load("saved", key)
+        for r in rows:
+            if r.get("id") == item_id:
+                r["note"] = str(note or "")[:1000]
+        self._json_save("saved", key, rows)
+
+    def samples_list(self, key):
+        return self._json_load("samples", key)
+
+    def sample_add(self, key, name, text):
+        name = str(name)[:120] or "sample"
+        rows = [r for r in self._json_load("samples", key) if r.get("name") != name]
+        if len(rows) >= SAMPLES_MAX:
+            return -1
+        rows.append({"name": name, "text": str(text)[:SAMPLE_MAX_CHARS]})
+        self._json_save("samples", key, rows)
+        return 1
+
+    def sample_delete(self, key, name):
+        self._json_save("samples", key, [r for r in self._json_load("samples", key) if r.get("name") != name])
 
     # ---- bloklama / dəvət kodu: yalnız Supabase rejimində mənalıdır
     def is_blocked(self):
@@ -1007,6 +1095,61 @@ class SupabaseStore:
 
     def delete_note_file(self, key, name):
         self._db().table("notes").delete().eq("subject", key).eq("name", str(name)).execute()
+
+    # ---- dəftər və sınaq imtahanı nümunələri (study.sql lazımdır)
+    def saved_list(self, key):
+        return ((self._db().table("saved_answers").select("id,chat_id,idx,question,answer,sources,note,created_at")
+                 .eq("subject", key).order("created_at", desc=True).limit(SAVED_MAX).execute().data) or [])
+
+    def saved_add(self, key, chat_id, idx, question, answer, sources=None):
+        row = {"user_id": self.user_id, "subject": key, "chat_id": str(chat_id)[:80], "idx": int(idx),
+               "question": str(question or "")[:2000], "answer": str(answer)[:20000],
+               "sources": _clean_sources(sources)}
+        try:
+            res = self._db().table("saved_answers").insert(row).execute()
+        except SessionExpired:
+            raise
+        except Exception as e:
+            low = str(e).lower()
+            if "limit: saved_answers" in low:
+                return -1
+            if "duplicate" in low or "23505" in low or "saved_answers_one" in low:
+                return "dup"
+            raise
+        data = res.data or []
+        return data[0].get("id") if data else "ok"
+
+    def saved_delete(self, key, item_id):
+        self._db().table("saved_answers").delete().eq("id", str(item_id)).execute()
+
+    def saved_delete_at(self, key, chat_id, idx):
+        (self._db().table("saved_answers").delete().eq("subject", key).eq("chat_id", str(chat_id))
+         .eq("idx", int(idx)).execute())
+
+    def saved_note(self, key, item_id, note):
+        self._db().table("saved_answers").update({"note": str(note or "")[:1000]}).eq("id", str(item_id)).execute()
+
+    def samples_list(self, key):
+        return ((self._db().table("exam_samples").select("name,text").eq("subject", key)
+                 .order("created_at").limit(SAMPLES_MAX).execute().data) or [])
+
+    def sample_add(self, key, name, text):
+        name = str(name)[:120] or "sample"
+        db = self._db()
+        db.table("exam_samples").delete().eq("subject", key).eq("name", name).execute()
+        try:
+            db.table("exam_samples").insert({"user_id": self.user_id, "subject": key, "name": name,
+                                             "text": str(text)[:SAMPLE_MAX_CHARS]}).execute()
+        except SessionExpired:
+            raise
+        except Exception as e:
+            if "limit: exam_samples" in str(e).lower():
+                return -1
+            raise
+        return 1
+
+    def sample_delete(self, key, name):
+        self._db().table("exam_samples").delete().eq("subject", key).eq("name", str(name)).execute()
 
     # ---- bloklama (blocked_users cədvəli: istifadəçi yalnız öz sətrini oxuya bilər, yaza bilməz)
     def is_blocked(self):
