@@ -8,6 +8,24 @@ import theme as themes  # görünüş: temalar və animasiyalar
 import hybrid  # hibrid axtarış: BM25 + vektor
 import pdfexp  # PDF ixracı və LaTeX düsturların çıxarılması
 
+
+def _fresh(mod):
+    """Fayl dəyişibsə modulu yenidən yükləyir. Streamlit bəzən köhnə versiyanı yaddaşda saxlayır
+    (yeni tema, mətn və s. görünmürdü). Yalnız vəziyyət saxlamayan modullar üçün işlədilir."""
+    try:
+        import importlib
+        m = os.path.getmtime(mod.__file__)
+        if getattr(mod, "_tk_mtime", None) not in (None, m):
+            mod = importlib.reload(mod)
+        mod._tk_mtime = m
+    except Exception:
+        pass
+    return mod
+
+
+themes = _fresh(themes)
+pdfexp = _fresh(pdfexp)
+
 try:
     from openai import OpenAI  # Groq və Perplexity bu kitabxana ilə işləyir
 except ImportError:
