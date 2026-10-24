@@ -1493,6 +1493,7 @@ def cb_delete(key, cid):
     except Exception:
         pass
     drop_chat_cache()
+    st.session_state.pop("_chat", None)
     if st.session_state.cid == cid:
         st.session_state.cid = None
     if cid in cmeta(S):
@@ -1834,6 +1835,7 @@ def do_login(email, pw, remember=True):
         st.error(t("code_send_fail"))
         return
     ss["lg_step"] = 2
+    ss["auth_tab"] = "login"
     ss["lg_email"] = email
     ss["lg_rem"] = bool(remember)
     ss["lg_tries"] = 0
@@ -1944,6 +1946,7 @@ def do_signup(email, pw, pw2, code, agree=False):
         st.rerun()
     elif res is not None and res.user is not None:
         ss["su_step"] = 2
+        ss["auth_tab"] = "signup"
         ss["su_email_val"] = email
         ss["su_tries"] = 0
         st.rerun()
@@ -2031,9 +2034,19 @@ def login_screen():
     lang_picker()
     st.markdown(themes.hero("Tutor Komandam", t("welcome_sub")), unsafe_allow_html=True)
     with st.container(key="login_card"):
-        tab_in, tab_up = st.tabs([t("login"), t("signup")])
         ss = st.session_state
-        with tab_in:
+        # st.tabs əvəzinə öz düymələrimiz: səhifə yenilənəndə (kod göndəriləndə) seçilmiş tab itmir
+        if ss.get("su_step") == 2 and not ss.get("auth_tab"):
+            ss["auth_tab"] = "signup"
+        tab = ss.get("auth_tab", "login")
+        a1, a2 = hcols("auth_tabs", 2)
+        with a1:
+            wide(st.button, t("login"), key="auth_tab_in", type="primary" if tab == "login" else "secondary",
+                 on_click=cb_pick, args=("auth_tab", "login"))
+        with a2:
+            wide(st.button, t("signup"), key="auth_tab_up", type="primary" if tab == "signup" else "secondary",
+                 on_click=cb_pick, args=("auth_tab", "signup"))
+        if tab == "login":
             if ss.get("su_step") == 2:
                 st.info(t("signup_pending"))
             if ss.get("lg_step") == 2:
@@ -2054,7 +2067,7 @@ def login_screen():
                     do_login(email, pw, rem)
                 with st.expander(t("forgot"), expanded=bool(ss.get("rs_step") == 2 or ss.get("rs_done"))):
                     reset_panel()
-        with tab_up:
+        else:
             if ss.get("su_step") == 2:
                 st.caption(t("signup_code_sent"))
                 with st.form("signup_code_form"):
@@ -2715,6 +2728,14 @@ CT = {
 if lang_ru:
     CT["ru"] = {**CT["en"], **lang_ru.CT}
 import extras_txt  # yeni funksiyaların mətnləri (az/en/ru)
+try:  # fayl dəyişibsə yenidən yüklə (Streamlit modulu yaddaşda köhnə saxlaya bilir: düymələrdə açar adı görünürdü)
+    import importlib as _il
+    _xt_m = os.path.getmtime(extras_txt.__file__)
+    if getattr(extras_txt, "_mtime", None) not in (None, _xt_m):
+        extras_txt = _il.reload(extras_txt)
+    extras_txt._mtime = _xt_m
+except Exception:
+    pass
 for _l in CT:
     CT[_l].update(extras_txt.get(_l))
     TXT[_l].update(extras_txt.get(_l))
@@ -4834,6 +4855,10 @@ ALLOW_PPLX = (not AUTH_ON) or (IS_OWNER or USER_USAGE.get("perplexity", 0) < PER
 
 # ======================= YAN PANEL =======================
 SB_CSS = """<style>
+[class*="st-key-hrow_cr_"] [data-testid="stHorizontalBlock"]{align-items:center;gap:4px}
+[class*="st-key-star_"] button,[class*="st-key-del_"] button{min-height:32px;height:32px;width:32px;min-width:32px;padding:0;display:flex;align-items:center;justify-content:center;border-radius:10px;border:1px solid transparent;background:transparent;box-shadow:none;font-size:1rem;line-height:1;color:var(--tk-muted)}
+[class*="st-key-star_"] button:hover,[class*="st-key-del_"] button:hover{border-color:var(--tk-border);background:var(--tk-surface2);color:var(--tk-text)}
+[class*="st-key-star_"] button p,[class*="st-key-del_"] button p{margin:0;font-size:1rem;line-height:1}
 .sb-brand{display:flex;align-items:center;gap:10px;margin:2px 0 12px}
 .sb-logo{width:38px;height:38px;border-radius:12px;display:grid;place-items:center;font-size:19px;font-weight:700;font-family:var(--tk-head);color:var(--tk-on);background:linear-gradient(135deg,var(--tk-accent),var(--tk-accent2));box-shadow:var(--tk-soft)}
 .sb-name{font-family:var(--tk-head);font-weight:700;font-size:1.05rem;line-height:1.15;color:var(--tk-text)}
@@ -6189,7 +6214,18 @@ if st.session_state.get("cur_key") != key:
     st.session_state.cur_key = key
     st.session_state.cid = None
 
-chat = sc(S.load_chat, key, st.session_state.cid) if st.session_state.cid else None
+def current_chat(key, cid):
+    """Açıq söhbət seansda saxlanılır: hər klikdə bazadan yenidən oxunmur (2 dəqiqədən bir yenilənir)."""
+    c = st.session_state.get("_chat")
+    if c and c[0] == key and c[1] == cid and time.time() - c[2] < 120:
+        return c[3]
+    ch = sc(S.load_chat, key, cid)
+    if ch is not None:
+        st.session_state["_chat"] = (key, cid, time.time(), ch)
+    return ch
+
+
+chat = current_chat(key, st.session_state.cid) if st.session_state.cid else None
 if chat is None:
     st.session_state.cid = None
     chat = {"id": S.new_chat_id(), "title": "", "updated": 0, "messages": []}
@@ -6381,6 +6417,7 @@ if q:
             S.save_chat(key, chat)
             drop_chat_cache()
             st.session_state.cid = chat["id"]
+            st.session_state["_chat"] = (key, chat["id"], time.time(), chat)
         except store.SessionExpired:
             drop_login()
             st.rerun()
