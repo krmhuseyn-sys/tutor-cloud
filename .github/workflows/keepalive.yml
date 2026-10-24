@@ -1,0 +1,37 @@
+# Tətbiqi oyaq saxlayır: hər 6 saatdan bir saytı açır, yatıbsa oyandırır.
+# Əl ilə işlətmək: GitHub -> tutor-cloud -> Actions -> "Tətbiqi oyaq saxla" -> Run workflow.
+# Tətbiq açılmasa iş "failed" olur və GitHub sənə e-poçt göndərir (sayt düşüb siqnalı).
+name: Tətbiqi oyaq saxla
+
+on:
+  schedule:
+    - cron: "17 */6 * * *"   # UTC 00:17, 06:17, 12:17, 18:17 (Bakı: 04:17, 10:17, 16:17, 22:17)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: keepalive
+  cancel-in-progress: true
+
+jobs:
+  wake:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Brauzeri qur
+        run: |
+          pip install playwright==1.56.0
+          python -m playwright install --with-deps chromium
+      - name: Saytı aç
+        env:
+          APP_URL: https://mytutor1.streamlit.app
+        run: python .github/keepalive.py
