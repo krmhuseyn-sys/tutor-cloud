@@ -2506,6 +2506,18 @@ def _att_rm(i):
         lst.pop(i)
 
 
+def mic_toggle():
+    """"+" menyusunda: səsli söhbəti bir kliklə açıb-bağlamaq."""
+    on = bool(st.session_state.get("tg_vchat"))
+    kw = dict(key="vc_tgl", help=ct("vc_off_help") if on else ct("vc_on_help"),
+              type="primary" if on else "secondary", on_click=_flip, args=("tg_vchat",))
+    label = ct("vc_btn_off") if on else ct("vc_btn_on")
+    try:
+        wide(st.button, label, icon=":material/mic_off:" if on else ":material/mic:", **kw)
+    except TypeError:
+        wide(st.button, label, **kw)
+
+
 def attach_menu():
     """➕ düyməsi: 1) cihazdan fayl seç, 2) kamera ilə şəkil çək. Seçilənlər siyahıda yığılır."""
     ss = st.session_state
@@ -2514,8 +2526,19 @@ def attach_menu():
         ss.att_n += 1
     ss["att_full"] = False
     with st.popover("+", help=t("att_help")):
-        mode_ = st.radio("att", ["file", "cam"], key="att_mode", horizontal=True,
-                         label_visibility="collapsed", format_func=lambda k: t("att_" + k))
+        mic_toggle()
+        if ss.get("att_mode") not in ("file", "cam"):
+            ss["att_mode"] = "file"
+        mode_ = ss["att_mode"]
+        a1, a2 = hcols("att_tabs", 2)  # radio əvəzinə tema rəngli seçim düymələri
+        for col_, k_, ic_ in ((a1, "file", ":material/upload_file:"), (a2, "cam", ":material/photo_camera:")):
+            with col_:
+                kw_ = dict(key=f"att_tab_{k_}", type="primary" if mode_ == k_ else "secondary",
+                           on_click=cb_pick, args=("att_mode", k_))
+                try:
+                    wide(st.button, t("att_" + k_), icon=ic_, **kw_)
+                except TypeError:
+                    wide(st.button, t("att_" + k_), **kw_)
         added = False
         if mode_ == "file":
             ups = st.file_uploader(t("att_file"), type=FILE_TYPES, accept_multiple_files=True,
@@ -6790,15 +6813,6 @@ _bottom = getattr(st, "bottom", None) or getattr(st, "_bottom", None)
 _audio = None
 
 
-def mic_toggle():
-    """Sual xanasının yanında səsli söhbəti bir kliklə açıb-bağlamaq."""
-    on = bool(st.session_state.get("tg_vchat"))
-    kw = dict(key="vc_tgl", help=ct("vc_off_help") if on else ct("vc_on_help"),
-              type="primary" if on else "secondary", on_click=_flip, args=("tg_vchat",))
-    try:
-        st.button("", icon=":material/mic_off:" if on else ":material/mic:", **kw)
-    except TypeError:
-        st.button(ct("vc_short"), **kw)
 
 
 if _bottom is not None:
@@ -6811,13 +6825,11 @@ if _bottom is not None:
         if st.session_state.att_list:
             att_ph.caption(t("att_added") + ", ".join(a["name"] for a in st.session_state.att_list))
         try:
-            c_att, c_mic, c_in = st.columns([1, 1, 13], vertical_alignment="bottom")
+            c_att, c_in = st.columns([1, 14], vertical_alignment="bottom")
         except TypeError:
-            c_att, c_mic, c_in = st.columns([1, 1, 13])
+            c_att, c_in = st.columns([1, 14])
         with c_att:
-            attach_menu()
-        with c_mic:
-            mic_toggle()
+            attach_menu()  # səsli söhbət düyməsi də bu menyunun içindədir
         with c_in:
             q = st.chat_input(t("feynman_ph") if mode == "feynman" else t("ask_ph"))
 else:  # köhnə Streamlit: ➕ sual xanasının üstündə

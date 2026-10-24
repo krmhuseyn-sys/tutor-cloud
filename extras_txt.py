@@ -576,6 +576,8 @@ _T.update({
 _T.update({
     # --- səsli söhbət düyməsi
     "vc_short": ("Səs", "Voice", "Голос"),
+    "vc_btn_on": ("Səsli söhbəti aç", "Turn on voice chat", "Включить голосовой чат"),
+    "vc_btn_off": ("Səsli söhbəti bağla", "Turn off voice chat", "Выключить голосовой чат"),
     "vc_on_help": ("Səsli söhbəti aç: danış, tutor səslə və qısa cavab versin",
                    "Turn on voice chat: speak and the tutor answers aloud, briefly",
                    "Включить голосовой чат: говори, тьютор ответит голосом и кратко"),
