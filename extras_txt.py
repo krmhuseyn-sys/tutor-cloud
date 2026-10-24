@@ -586,6 +586,72 @@ _T.update({
 })
 
 
+_T.update({
+    # --- cavab keşi və sürət
+    "cache_hit": ("yaddaşdan, limitdən getmədi", "from memory, not counted", "из памяти, не учтено"),
+    "perf_cache": ("Yaddaşdan cavab: {h}/{n} ({p}%)", "Answers from memory: {h}/{n} ({p}%)", "Ответы из памяти: {h}/{n} ({p}%)"),
+    "perf_prov": ("Model", "Model", "Модель"),
+    "perf_first": ("ilk söz (san, median)", "first word (s, median)", "первое слово (с, медиана)"),
+    "perf_total": ("cəmi (san, median)", "total (s, median)", "всего (с, медиана)"),
+})
+
+
+_T.update({
+    # --- müəllim paneli
+    "ci_title": ("Sinif üzrə çətinliklər (anonim)", "Class difficulties (anonymous)", "Трудности группы (анонимно)"),
+    "ci_hint": ("Müəllimə göstərmək üçün: heç bir ad yoxdur, yalnız ən azı 3 tələbədə görünən bölmələr göstərilir.",
+                "For showing your teacher: no names, only sections that appear for at least 3 students.",
+                "Для преподавателя: без имён, только разделы, встречающиеся минимум у 3 студентов."),
+    "ci_need_sql": ("Bu bölmə üçün study.sql-in son versiyası işlədilməlidir.", "Run the latest study.sql for this section.",
+                    "Для этого раздела нужно выполнить последнюю версию study.sql."),
+    "ci_too_few": ("Bu fəndə hələ {n} tələbənin kartı var. Anonimlik üçün ən azı 3 lazımdır.",
+                   "Only {n} students have cards in this subject. At least 3 are needed for anonymity.",
+                   "Карточки есть только у {n} студентов. Для анонимности нужно минимум 3."),
+    "ci_students": ("Tələbə", "Students", "Студентов"),
+    "ci_active": ("Aktiv", "Active", "Активных"),
+    "ci_reviews": ("Təkrar", "Reviews", "Повторений"),
+    "ci_weak": ("Çətin kart", "Hard cards", "Трудных карточек"),
+    "ci_mock": ("Sınaq ortalaması", "Practice exam average", "Средний пробный экзамен"),
+    "ci_votes": ("Bəyənmə / bəyənməmə", "Helpful / not", "Полезно / нет"),
+    "ci_hard": ("Ən çox səhv edilən bölmələr", "Sections with the most mistakes", "Разделы с наибольшим числом ошибок"),
+    "ci_no_hard": ("Hələ ən azı 3 tələbədə ortaq olan çətin bölmə yoxdur.", "No hard section is shared by at least 3 students yet.",
+                   "Пока нет трудных разделов, общих минимум для 3 студентов."),
+    "ci_src": ("Mənbə", "Source", "Источник"),
+    "ci_pages": ("Səhifələr", "Pages", "Страницы"),
+    "ci_users": ("tələbə", "students", "студ."),
+    "ci_lapses": ("səhv", "mistakes", "ошибок"),
+    "ci_period": ("Dövr", "Period", "Период"),
+    "ci_dl": ("Müəllim üçün hesabat (Markdown)", "Report for the teacher (Markdown)", "Отчёт для преподавателя (Markdown)"),
+    "ci_privacy": ("Hesabat anonimdir: tələbə adları yoxdur, hər bölmə ən azı 3 tələbənin məlumatına əsaslanır.",
+                   "The report is anonymous: no student names, each section is based on at least 3 students.",
+                   "Отчёт анонимный: без имён, каждый раздел основан минимум на 3 студентах."),
+})
+
+
+_T.update({
+    # --- fokus taymeri
+    "fo_title": ("Fokus taymeri", "Focus timer", "Таймер фокуса"),
+    "fo_running": ("(gedir)", "(running)", "(идёт)"),
+    "fo_len": ("Müddət", "Length", "Длительность"),
+    "fo_min": ("dəq", "min", "мин"),
+    "fo_start": ("Başla", "Start", "Старт"),
+    "fo_stop": ("Dayandır", "Stop", "Стоп"),
+    "fo_done": ("Bitdi! Fasilə ver", "Done! Take a break", "Готово! Сделай перерыв"),
+    "fo_done_toast": ("{n} dəqiqəlik fokus bitdi. Afərin! 5 dəqiqə fasilə ver.", "{n}-minute focus done. Well done! Take a 5-minute break.",
+                      "Фокус {n} мин завершён. Отлично! Отдохни 5 минут."),
+    "fo_today": ("Bu gün fokus: {n} dəq", "Focus today: {n} min", "Фокус сегодня: {n} мин"),
+    "fo_stat": ("Fokus (dəq)", "Focus (min)", "Фокус (мин)"),
+    # --- Ctrl+K
+    "kb_hint": ("Ctrl+K: sürətli keçid", "Ctrl+K: quick switch", "Ctrl+K: быстрый переход"),
+    "kb_ph": ("Fənn, bölmə və ya rejim yaz...", "Type a subject, section or mode...", "Предмет, раздел или режим..."),
+    "kb_none": ("Heç nə tapılmadı", "Nothing found", "Ничего не найдено"),
+    "kb_g_act": ("əmr", "action", "действие"),
+    "kb_g_view": ("bölmə", "section", "раздел"),
+    "kb_g_mode": ("rejim", "mode", "режим"),
+    "kb_g_subj": ("fənn", "subject", "предмет"),
+})
+
+
 def add(d):
     _T.update(d)
 

@@ -434,6 +434,11 @@ def inject_theme():
 
 
 inject_theme()
+# Sabit yerlər: bəzi işlərdə görünməz komponentlər (kuki oxuma/yazma) əlavə olunur. Onlar həmişə eyni yerdə
+# olmasa, səhifədəki bütün elementlər bir pillə sürüşür və Streamlit köhnələri solğun halda aşağıda saxlayır
+# (ekranda hər şeyin "ikiqat" görünməsi). Bu boş yerlər sürüşmənin qarşısını alır.
+_CK_R = st.empty()
+_CK_W = st.empty()
 
 # ---- PIN qoruması (APP_PIN təyin olunubsa; təyin olunmayıbsa yerli işləmədə heç nə soruşmur) ----
 _PIN = os.getenv("APP_PIN", "")
@@ -1596,10 +1601,11 @@ def cookie_write(value):
     import streamlit.components.v1 as components
     v = _j.dumps(value or "")
     age = 2592000 if value else 0
-    components.html(
-        "<script>try{const p=window.parent;const sec=p.location.protocol==='https:'?'; Secure':'';"
-        f"p.document.cookie='{COOKIE}='+encodeURIComponent({v})+'; max-age={age}; path=/; SameSite=Strict'+sec;"
-        "}catch(e){}</script>", height=0)
+    with _CK_W:
+        components.html(
+            "<script>try{const p=window.parent;const sec=p.location.protocol==='https:'?'; Secure':'';"
+            f"p.document.cookie='{COOKIE}='+encodeURIComponent({v})+'; max-age={age}; path=/; SameSite=Strict'+sec;"
+            "}catch(e){}</script>", height=0)
 
 
 _cookie_reader = None
@@ -1613,7 +1619,8 @@ def cookie_read():
     if _cookie_reader is None:
         _cookie_reader = components.declare_component(
             "tk_cookie", path=os.path.join(os.path.dirname(os.path.abspath(__file__)), "cookie_comp"))
-    return _cookie_reader(key="tk_cookie_reader", default=None)
+    with _CK_R:
+        return _cookie_reader(key="tk_cookie_reader", default=None)
 
 
 def try_restore():
@@ -1746,6 +1753,49 @@ def log_perf(rec):
                 f.writelines(lines)
     except Exception:
         pass
+
+
+# ---- cavab keşi: eyni tələbə eyni sualı yenidən verəndə cavab dərhal gəlir və limitdən getmir.
+# Bilərəkdən ŞƏXSİDİR (hər istifadəçinin öz keşi): cavablar tələbənin yaddaşına və profilinə görə fərdiləşir,
+# başqasına göstərmək həm məxfilik, həm keyfiyyət baxımından düzgün deyil.
+ANS_CACHE_TTL = 7 * 86400
+ANS_CACHE_MAX = 3000
+
+
+@st.cache_resource
+def _answer_cache():
+    return {}
+
+
+def _norm_q(q):
+    """Müqayisə üçün: böyük/kiçik hərf, durğu işarələri və diakritika fərq etmir (İ/ı/i, ş/s, ə/e və s.)."""
+    import unicodedata
+    x = str(q or "").replace("İ", "i").replace("I", "i").replace("ı", "i").lower().replace("ə", "e")
+    x = "".join(ch for ch in unicodedata.normalize("NFKD", x) if not unicodedata.combining(ch))
+    return re.sub(r"\s+", " ", re.sub(r"[^\w\s]", " ", x)).strip()
+
+
+def ans_cache_key(uid, key, mode, q, grounded, voice):
+    raw = "|".join([str(uid), key, mode, st.session_state.get("ui", "az"), "g" if grounded else "-",
+                    "v" if voice else "-", _norm_q(q)])
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def ans_cache_get(k):
+    c = _answer_cache()
+    v = c.get(k)
+    if v and time.time() - v["t"] < ANS_CACHE_TTL:
+        return v
+    c.pop(k, None)
+    return None
+
+
+def ans_cache_put(k, answer, srcs, by):
+    c = _answer_cache()
+    if len(c) >= ANS_CACHE_MAX:
+        for old in sorted(c, key=lambda x: c[x]["t"])[:ANS_CACHE_MAX // 10]:
+            c.pop(old, None)
+    c[k] = {"t": time.time(), "a": answer, "srcs": srcs, "by": by}
 
 
 def read_perf(n=50):
@@ -2935,6 +2985,28 @@ def list_cards_ui(S_, key):
 
 
 # ---- test rejimi: kartlardan çoxseçimli sual (əlavə AI sorğusu yoxdur)
+def card_weight(c, today=None):
+    """Adaptiv seçim: unudulmağa yaxın, çətin və tez-tez səhv edilən kartlar daha çox düşür."""
+    r = store.retrievability(c, today)
+    w = 2.0 if r is None else 1.0 + 4.0 * (1.0 - r)
+    w += 1.5 * min(int(c.get("lapses") or 0), 4)
+    try:
+        w += max(0.0, (float(c.get("difficulty") or 0) - 5.0) / 2.5)
+    except Exception:
+        pass
+    return max(0.3, w)
+
+
+def adaptive_pick(pool, n, rng):
+    """Çəkiyə görə təkrarsız seçim (Efraimidis-Spirakis). Zəif kartlar üstündür, amma hamısı şans alır."""
+    today = store.baku_today()
+    keyed = [(rng.random() ** (1.0 / card_weight(c, today)), i) for i, c in enumerate(pool)]
+    keyed.sort(reverse=True)
+    out = [pool[i] for _, i in keyed[:n]]
+    rng.shuffle(out)
+    return out
+
+
 def build_quiz(cards, n, rng=None, extra=None):
     """cards-dan n sual qurur: düzgün cavab = kartın arxası, yanlışlar = digər kartların arxaları.
     Qaytarır: [{card, opts: [mətn,...], ans: indeks}, ...]. Ən azı 4 fərqli cavab lazımdır."""
@@ -2946,7 +3018,7 @@ def build_quiz(cards, n, rng=None, extra=None):
         backs.setdefault(c["back"].strip().lower(), c["back"].strip())
     if len(backs) < 4:
         return []
-    picked = rng.sample(pool, min(n, len(pool)))
+    picked = adaptive_pick(pool, min(n, len(pool)), rng)
     out = []
     for c in picked:
         right = c["back"].strip()
@@ -3513,6 +3585,8 @@ def dashboard_page(S_):
         ("", rev_r, ct("d_rev_r")),
         ("", q_r, ct("d_q_r")),
         ("", days_r, ct("d_days_r")),
+        ("", sum(int(m_) for d_, m_ in (get_prefs(S_).get("focus_log") or {}).items() if start <= d_ <= today),
+         ct("fo_stat")),
     ])
 
     with st.container(border=True):
@@ -3606,6 +3680,7 @@ def owner_page(S_):
         st.warning(ct("mfa_owner_warn"))
     owner_feedback_ui(S_)
     owner_access_ui(S_)
+    owner_class_ui(S_)
     owner_msg_reports_ui(S_)
     owner_log_ui(S_)
 
@@ -5181,11 +5256,21 @@ def health_ui():
         except Exception:
             books.append(f"{k_}: ?")
     st.caption(f"{ct('h_books')}: " + ", ".join(books))
-    perf = read_perf(50)
+    perf = read_perf(200)
     if perf:
         import statistics as _st
-        med = lambda k: round(_st.median([r[k] for r in perf if isinstance(r.get(k), (int, float))] or [0]), 2)
-        st.caption(ct("perf_line", n=len(perf), a=med("search"), b=med("first"), c=med("total")))
+        gen_ = [r for r in perf if not r.get("cache")]
+        med = lambda rows, k: round(_st.median([r[k] for r in rows if isinstance(r.get(k), (int, float))] or [0]), 2)
+        st.caption(ct("perf_line", n=len(gen_), a=med(gen_, "search"), b=med(gen_, "first"), c=med(gen_, "total")))
+        hits = len(perf) - len(gen_)
+        st.caption(ct("perf_cache", h=hits, n=len(perf), p=round(hits / len(perf) * 100)))
+        by_p = {}
+        for r in gen_:
+            by_p.setdefault(r.get("p") or "?", []).append(r)
+        if len(by_p) > 1 or "?" not in by_p:
+            st.markdown("\n".join([f"| {ct('perf_prov')} | n | {ct('perf_first')} | {ct('perf_total')} |", "|---|---|---|---|"]
+                                  + [f"| {_e(p_)} | {len(rows)} | {med(rows, 'first')} | {med(rows, 'total')} |"
+                                     for p_, rows in sorted(by_p.items(), key=lambda x: -len(x[1]))]))
     else:
         st.caption(ct("perf_none"))
     errs = read_errors(15)
@@ -6112,6 +6197,70 @@ def messages_page(S_):
         msg_chats_tab(S_, convs)
 
 
+def class_report_md(subj, days, d):
+    lines = [f"# {ct('ci_title')}: {subj_name(subj)}", "",
+             f"- {ct('ci_period')}: {ct('r' + str(days))}",
+             f"- {ct('ci_students')}: {d.get('students', 0)} · {ct('ci_active')}: {d.get('active', 0)}",
+             f"- {ct('ci_reviews')}: {d.get('reviews', 0)} · {ct('ci_weak')}: {d.get('weak_pct', 0)}%"]
+    m = d.get("mock") or {}
+    if m.get("avg") is not None:
+        lines.append(f"- {ct('ci_mock')}: {m['avg']}% ({m.get('tries', 0)} / {m.get('users', 0)})")
+    hard = d.get("hard") or []
+    if hard:
+        lines += ["", f"## {ct('ci_hard')}", "", f"| {ct('ci_src')} | {ct('ci_pages')} | {ct('ci_users')} | {ct('ci_lapses')} |",
+                  "|---|---|---|---|"]
+        lines += [f"| {h.get('src')} | {h.get('pages') or '-'} | {h.get('users')} | {h.get('lapses')} |" for h in hard]
+    lines += ["", ct("ci_privacy")]
+    return "\n".join(lines)
+
+
+def owner_class_ui(S_):
+    """Müəllim paneli: sinfin ən çox çətinlik çəkdiyi bölmələr. Yalnız anonim, ən azı 3 tələbəlik qruplar."""
+    sec(ct("ci_title"))
+    st.caption(ct("ci_hint"))
+    subjects = [k_ for k_ in SUBJ_KEYS if k_ != "gen"]
+    subj = st.selectbox(t("subject"), subjects, format_func=subj_name, key="ci_subj")
+    sel = range_select("ci_range")
+    days = sel or 3650
+    try:
+        d = S_.owner_class_insights(subj, days)
+    except store.SessionExpired:
+        drop_login()
+        st.rerun()
+        return
+    except Exception as e:
+        log_error("class_insights", e)
+        st.caption(ct("ci_need_sql"))
+        return
+    if not isinstance(d, dict):
+        st.caption(ct("ci_need_sql"))
+        return
+    if d.get("too_few"):
+        st.info(ct("ci_too_few", n=d.get("students", 0)))
+        return
+    m = d.get("mock") or {}
+    v = d.get("votes") or {}
+    stat_cards([
+        ("", d.get("students", 0), ct("ci_students"), {"hero": True}),
+        ("", d.get("active", 0), ct("ci_active")),
+        ("", d.get("reviews", 0), ct("ci_reviews")),
+        ("", f"{d.get('weak_pct', 0)}%", ct("ci_weak")),
+        ("", f"{m['avg']}%" if m.get("avg") is not None else "-", ct("ci_mock")),
+        ("", f"{v.get('up', 0)} / {v.get('down', 0)}", ct("ci_votes")),
+    ])
+    hard = d.get("hard") or []
+    if hard:
+        st.markdown(f"**{ct('ci_hard')}**")
+        st.markdown("\n".join([f"| {ct('ci_src')} | {ct('ci_pages')} | {ct('ci_users')} | {ct('ci_lapses')} |",
+                               "|---|---|---|---|"]
+                              + [f"| {_e(h.get('src'))} | {_e(h.get('pages') or '-')} | {int(h.get('users') or 0)} | "
+                                 f"{int(h.get('lapses') or 0)} |" for h in hard]))
+    else:
+        st.caption(ct("ci_no_hard"))
+    st.download_button(ct("ci_dl"), class_report_md(subj, sel, d).encode("utf-8"), file_name=f"sinif_{subj}.md",
+                       mime="text/markdown", key="ci_dl")
+
+
 def owner_log_ui(S_):
     """Sahib: təhlükəsizlik jurnalı (bloklama, dəvət kodu, ad dəyişmə, şikayət qərarları)."""
     sec(ct("sl_title"))
@@ -6163,6 +6312,201 @@ def owner_msg_reports_ui(S_):
             if wide(b.button, ct("m_o_block"), key=f"m_rb_{r['id']}", type="primary"):
                 sc(S_.owner_msg_resolve, r["id"], "block")
                 st.rerun()
+
+
+# ======================= FOKUS TAYMERİ (Pomodoro) =======================
+# Geri sayım brauzerdə JavaScript ilə gedir (serverə hər saniyə sorğu yoxdur). Başlama vaxtı hesabda saxlanır,
+# ona görə səhifə yenilənsə də taymer davam edir. Bitəndə dəqiqələr Panelə yazılır.
+FOCUS_OPTS = [15, 25, 45, 60]
+
+
+def _focus_log(S_, minutes):
+    if minutes < 1:
+        return
+    p = get_prefs(S_)
+    lg = p.setdefault("focus_log", {})
+    today = store.baku_today()
+    lg[today] = int(lg.get(today, 0)) + int(minutes)
+    for d_ in sorted(lg)[:-120]:  # ən çox 120 gün saxlanır
+        lg.pop(d_, None)
+
+
+def cb_focus_start(S_):
+    mins = int(st.session_state.get("fo_len", 25))
+    get_prefs(S_)["focus_run"] = {"start": time.time(), "dur": mins * 60}
+    save_prefs(S_)
+
+
+def cb_focus_stop(S_):
+    p = get_prefs(S_)
+    run = p.pop("focus_run", None)
+    if run:
+        _focus_log(S_, int((time.time() - run["start"]) // 60))
+    save_prefs(S_)
+
+
+def focus_html(left, total, done_txt):
+    """Brauzerdə geri sayım. Bitəndə qısa səs və başlıqda xəbərdarlıq."""
+    return f"""<div id="f" style="font-family:system-ui,sans-serif;padding:2px 2px 0"></div>
+<script>
+(function(){{
+  const P=window.parent, root=P.document.documentElement, css=P.getComputedStyle(root);
+  const acc=(css.getPropertyValue('--tk-accent')||'#1b7f73').trim(), acc2=(css.getPropertyValue('--tk-accent2')||acc).trim();
+  const txt=(css.getPropertyValue('--tk-text')||'#222').trim(), brd=(css.getPropertyValue('--tk-border')||'#ddd').trim();
+  const end=Date.now()+{int(left)}*1000, total={int(total)}, el=document.getElementById('f');
+  let rang=false;
+  function beep(){{try{{const a=new (window.AudioContext||window.webkitAudioContext)();[0,0.35,0.7].forEach(t=>{{const o=a.createOscillator(),g=a.createGain();o.frequency.value=880;o.connect(g);g.connect(a.destination);g.gain.setValueAtTime(0.15,a.currentTime+t);o.start(a.currentTime+t);o.stop(a.currentTime+t+0.2);}});}}catch(e){{}}}}
+  function tick(){{
+    const s=Math.max(0,Math.round((end-Date.now())/1000)), m=Math.floor(s/60), r=s%60;
+    const pct=total?Math.round((1-s/total)*100):100;
+    el.innerHTML='<div style="display:flex;justify-content:space-between;align-items:baseline;color:'+txt+'"><b style="font-size:22px">'+String(m).padStart(2,'0')+':'+String(r).padStart(2,'0')+'</b><span style="font-size:12px;opacity:.7">'+(s?pct+'%':{json.dumps(done_txt)})+'</span></div>'
+      +'<div style="height:7px;border-radius:99px;border:1px solid '+brd+';overflow:hidden;margin-top:4px"><i style="display:block;height:100%;width:'+pct+'%;background:linear-gradient(90deg,'+acc+','+acc2+')"></i></div>';
+    if(!s&&!rang){{rang=true;beep();try{{P.document.title='\u23F0 '+P.document.title;}}catch(e){{}}}}
+    if(s) setTimeout(tick,1000);
+  }}
+  tick();
+}})();
+</script>"""
+
+
+def focus_ui(S_):
+    import streamlit.components.v1 as components
+    p = get_prefs(S_)
+    run = p.get("focus_run")
+    if run and time.time() >= run["start"] + run["dur"]:  # bitib: dəqiqələri yaz
+        p.pop("focus_run", None)
+        _focus_log(S_, run["dur"] // 60)
+        save_prefs(S_)
+        st.toast(ct("fo_done_toast", n=run["dur"] // 60))
+        run = None
+    with st.expander(ct("fo_title") + (" " + ct("fo_running") if run else ""), expanded=bool(run)):
+        if run:
+            left = run["start"] + run["dur"] - time.time()
+            components.html(focus_html(left, run["dur"], ct("fo_done")), height=56)
+            wide(st.button, ct("fo_stop"), key="fo_stop", on_click=cb_focus_stop, args=(S_,))
+        else:
+            st.select_slider(ct("fo_len"), options=FOCUS_OPTS, value=25, key="fo_len",
+                             format_func=lambda m: f"{m} {ct('fo_min')}")
+            wide(st.button, ct("fo_start"), key="fo_start", type="primary", on_click=cb_focus_start, args=(S_,))
+            today_m = int((p.get("focus_log") or {}).get(store.baku_today(), 0))
+            if today_m:
+                st.caption(ct("fo_today", n=today_m))
+
+
+# ======================= Ctrl+K: SÜRƏTLİ KEÇİD =======================
+def cb_kb_view(v):
+    cb_view(v)
+
+
+def cb_kb_mode(m):
+    st.session_state["mode_sel"] = m
+    st.session_state["view"] = "chat"
+
+
+def cb_kb_subj(k_):
+    st.session_state["subj"] = k_
+    for l_ in ("az", "en", "ru"):
+        st.session_state.pop("subj_sel_" + l_, None)
+
+
+def cb_kb_new():
+    st.session_state.cid = None
+    st.session_state["view"] = "chat"
+
+
+def kb_palette(views, modes):
+    """Gizli düymələr + brauzerdə Ctrl+K (Mac-da Cmd+K) pəncərəsi. Seçim gizli düyməyə klik edir."""
+    import streamlit.components.v1 as components
+    items = []
+    with st.sidebar.container(key="kbh"):
+        wide(st.button, "new", key="kb_new", on_click=cb_kb_new)
+        items.append({"k": "kb_new", "l": t("new_chat"), "g": ct("kb_g_act")})
+        for v in views:
+            st.button(v, key="kb_v_" + v, on_click=cb_kb_view, args=(v,))
+            items.append({"k": "kb_v_" + v, "l": _noemoji(ct("view_" + v)), "g": ct("kb_g_view")})
+        for m in modes:
+            st.button(m, key="kb_m_" + m, on_click=cb_kb_mode, args=(m,))
+            items.append({"k": "kb_m_" + m, "l": _noemoji(t("m_" + m)), "g": ct("kb_g_mode")})
+        for k_ in SUBJ_KEYS:
+            st.button(k_, key="kb_s_" + k_, on_click=cb_kb_subj, args=(k_,))
+            items.append({"k": "kb_s_" + k_, "l": subj_name(k_), "g": ct("kb_g_subj")})
+    st.sidebar.markdown("<style>.st-key-kbh{display:none!important}</style>"
+                        f'<div class="sb-label" style="text-align:center;opacity:.7">{_e(ct("kb_hint"))}</div>',
+                        unsafe_allow_html=True)
+    data = json.dumps({"items": items, "ph": ct("kb_ph"), "none": ct("kb_none")}, ensure_ascii=False).replace("</", "<\\/")
+    components.html(KB_JS.replace("__DATA__", data), height=0)
+
+
+KB_JS = """<script>
+(function(){
+  const P = window.parent, D = P.document, DATA = __DATA__;
+  P.__tkKB = DATA;  // yenilənən etiketlər (dil dəyişəndə)
+  const css = P.getComputedStyle(D.documentElement);
+  const v = n => (css.getPropertyValue(n) || '').trim();
+  let box = null, sel = 0, list = [];
+  // İ/ı/i, ə/e, ş/s kimi fərqlər axtarışa mane olmasın
+  const norm = x => String(x).replace(/[İIı]/g, 'i').toLowerCase().normalize('NFD')
+    .replace(/[\\u0300-\\u036f]/g, '').replace(/ə/g, 'e');
+  function close(){ if (box){ box.remove(); box = null; } }
+  function go(it){
+    close();
+    const b = D.querySelector('.st-key-' + it.k + ' button');
+    if (b) b.click();
+  }
+  function render(q){
+    const d = P.__tkKB, ql = norm(q || '');
+    list = d.items.filter(i => !ql || norm(i.l + ' ' + i.g).includes(ql));
+    sel = Math.min(sel, Math.max(0, list.length - 1));
+    const ul = box.querySelector('ul');
+    ul.innerHTML = '';
+    if (!list.length){ const li = D.createElement('li'); li.textContent = d.none; li.style.cssText = 'padding:10px 12px;opacity:.6'; ul.appendChild(li); }
+    list.forEach((it, i) => {
+      const li = D.createElement('li');
+      li.style.cssText = 'display:flex;justify-content:space-between;gap:12px;padding:9px 12px;border-radius:10px;cursor:pointer;'
+        + (i === sel ? 'background:' + (v('--tk-surface2') || '#eee') + ';' : '');
+      const a = D.createElement('span'); a.textContent = it.l;
+      const g = D.createElement('small'); g.textContent = it.g; g.style.opacity = '.6';
+      li.appendChild(a); li.appendChild(g);
+      li.onmouseenter = () => { sel = i; render(box.querySelector('input').value); };
+      li.onclick = () => go(it);
+      ul.appendChild(li);
+    });
+  }
+  function open(){
+    if (box){ close(); return; }
+    box = D.createElement('div');
+    box.style.cssText = 'position:fixed;inset:0;z-index:999999;background:rgba(0,0,0,.35);display:flex;justify-content:center;align-items:flex-start;padding-top:12vh';
+    const card = D.createElement('div');
+    card.style.cssText = 'width:min(560px,92vw);max-height:60vh;overflow:auto;border-radius:16px;padding:10px;box-shadow:0 20px 60px rgba(0,0,0,.3);'
+      + 'background:' + (v('--tk-surface') || '#fff') + ';color:' + (v('--tk-text') || '#111') + ';border:1px solid ' + (v('--tk-border') || '#ddd');
+    const inp = D.createElement('input');
+    inp.placeholder = P.__tkKB.ph;
+    inp.style.cssText = 'width:100%;box-sizing:border-box;padding:10px 12px;border-radius:10px;border:1px solid ' + (v('--tk-border') || '#ccc')
+      + ';background:transparent;color:inherit;font-size:15px;outline:none;margin-bottom:6px';
+    const ul = D.createElement('ul'); ul.style.cssText = 'list-style:none;margin:0;padding:0';
+    card.appendChild(inp); card.appendChild(ul); box.appendChild(card);
+    box.onclick = e => { if (e.target === box) close(); };
+    inp.oninput = () => { sel = 0; render(inp.value); };
+    inp.onkeydown = e => {
+      if (e.key === 'ArrowDown'){ sel = Math.min(sel + 1, list.length - 1); render(inp.value); e.preventDefault(); }
+      else if (e.key === 'ArrowUp'){ sel = Math.max(sel - 1, 0); render(inp.value); e.preventDefault(); }
+      else if (e.key === 'Enter'){ if (list[sel]) go(list[sel]); e.preventDefault(); }
+      else if (e.key === 'Escape'){ close(); }
+    };
+    D.body.appendChild(box);
+    sel = 0; render('');
+    inp.focus();
+  }
+  // Streamlit bu iframe-i yenidən yarada bilər: köhnə dinləyici silinir, yalnız ən sonuncu işləyir
+  const h = e => {
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K' || e.code === 'KeyK')){ e.preventDefault(); open(); }
+    else if (e.key === 'Escape' && box){ close(); }
+  };
+  if (P.__tkKBh) { try { D.removeEventListener('keydown', P.__tkKBh); } catch (e) {} }
+  P.__tkKBh = h;
+  D.addEventListener('keydown', h);
+})();
+</script>"""
 
 
 # ======================= İLK GİRİŞ TURU =======================
@@ -6270,9 +6614,8 @@ if "fs_sel" not in st.session_state:
     st.session_state["rd_mode"] = bool(_vp.get("read"))
     st.session_state["ff_sel"] = _vp.get("font") if _vp.get("font") in FONT_OPT else "default"
 _rc = read_css()
-if _rc:
-    st.sidebar.markdown(_rc, unsafe_allow_html=True)
-    st.markdown(_rc, unsafe_allow_html=True)  # əsas hissədə də: yan panel bağlı olanda belə şrift tətbiq olunsun
+st.sidebar.markdown(_rc or "<span></span>", unsafe_allow_html=True)  # həmişə eyni yer (sürüşmə olmasın)
+st.markdown(_rc or "<span></span>", unsafe_allow_html=True)  # əsas hissədə də: yan panel bağlı olanda belə şrift tətbiq olunsun
 
 # bölmələr: 2 sütunlu düymə şəbəkəsi, aktiv olan tema rəngində dolu
 _views = (["chat", "cards", "plan", "notebook", "stats"] + (["msgs"] if (AUTH_ON and getattr(S, "msg_enabled", False)) else [])
@@ -6288,7 +6631,20 @@ for _n, _v in enumerate(_views):
              type="primary" if st.session_state["view"] == _v else "secondary", on_click=cb_view, args=(_v,))
 view = st.session_state["view"]
 
-key = st.sidebar.selectbox(t("subject"), SUBJ_KEYS, format_func=subj_name)
+_ui_now = st.session_state.get("ui", "az")
+if st.session_state.get("subj") not in SUBJ_KEYS:
+    st.session_state["subj"] = SUBJ_KEYS[0]
+
+
+def cb_subj_sel(wkey):
+    st.session_state["subj"] = st.session_state.get(wkey, st.session_state["subj"])
+
+
+key = st.sidebar.selectbox(t("subject"), SUBJ_KEYS, index=SUBJ_KEYS.index(st.session_state["subj"]),
+                           format_func=subj_name, key="subj_sel_" + _ui_now,
+                           on_change=cb_subj_sel, args=("subj_sel_" + _ui_now,))
+if key in SUBJ_KEYS:
+    st.session_state["subj"] = key
 _MODES = ["learn", "practice", "exam", "feynman"]
 if st.session_state.get("mode_sel") not in _MODES:
     st.session_state["mode_sel"] = "learn"
@@ -6323,6 +6679,10 @@ with foot_box:
         with _c:
             wide(st.button, ct("view_" + _v), key=f"nav_{_v}",
                  type="primary" if view == _v else "secondary", on_click=cb_view, args=(_v,))
+
+with list_box:
+    focus_ui(S)
+kb_palette(_views + _foot_views, _MODES)
 
 tour_maybe(S)
 
@@ -6502,7 +6862,12 @@ if voice_in:
                 st.error(friendly(e))
             st.session_state.mic_n += 1
 
-if q and AUTH_ON and USER_USAGE.get("question", 0) >= DAILY_QUESTIONS:
+_ckey, _hit = None, None
+if q and not files and not web_on and not chat["messages"] and len(_norm_q(q)) >= 6:
+    _ckey = ans_cache_key(S.user_id if AUTH_ON else "local", key, mode, q, IS_OWNER and key != "gen", vchat)
+    _hit = ans_cache_get(_ckey)
+
+if q and not _hit and AUTH_ON and USER_USAGE.get("question", 0) >= DAILY_QUESTIONS:
     st.warning(t("quota_hit"))
     q = None
 
@@ -6515,6 +6880,23 @@ if q:
         st.warning(w_)
     _perf = {"subj": key}
     _t_all = time.time()
+if q and _hit:  # keşdən: axtarış və AI çağırışı yoxdur
+    srcs, web_urls = list(_hit.get("srcs") or []), []
+    by = (_hit.get("by") or "") + " · " + ct("cache_hit")
+    with user_msg():
+        st.markdown(q)
+    with st.chat_message("assistant"):
+        answer = _hit["a"]
+        st.markdown(fix_math(safe_md(answer)))
+        st.caption(f"{t('answered')}: {by}")
+        if srcs:
+            render_sources(answer, srcs, key, f"{chat['id']}_live")
+        if speak_on:
+            d_, e_ = speak(answer, key)
+            show_audio(d_, e_, True)
+    log_perf({"subj": key, "search": 0, "first": round(time.time() - _t_all, 2),
+              "total": round(time.time() - _t_all, 2), "cache": 1})
+elif q:
     ctx, srcs = retrieve(key, q, allow=IS_OWNER)
     _nctx, _nsrcs = retrieve_notes(key, q)
     if _nctx:
@@ -6561,6 +6943,7 @@ if q:
         if answer:
             _perf["total"] = round(time.time() - _t_all, 2)
             _perf["verify"] = bool(use_verify)
+            _perf["p"] = str(st.session_state.get("used", ""))[:30]
             log_perf(_perf)
             by = used_label(st.session_state.get("used", ""))
             st.caption(f"{t('answered')}: {by}")
@@ -6571,28 +6954,30 @@ if q:
             if speak_on:
                 d_, e_ = speak(answer, key)
                 show_audio(d_, e_, True)
-    if answer:
-        if not chat["title"]:
-            chat["title"] = re.sub(r"\s+", " ", q).strip()[:40]
-        saved_q = q + (f"\n\n{t('file_note')}" + ", ".join(att_names) if att_names else "")
-        chat["messages"].append({"role": "user", "content": saved_q})
-        chat["messages"].append({"role": "assistant", "content": answer, "sources": srcs,
-                                 "web": web_urls, "by": f"{t('answered')}: {by}"})
-        try:
-            S.save_chat(key, chat)
-            drop_chat_cache()
-            st.session_state.cid = chat["id"]
-            st.session_state["_chat"] = (key, chat["id"], time.time(), chat)
-        except store.SessionExpired:
-            drop_login()
-            st.rerun()
-        except Exception:
-            st.error(t("save_err"))
-        if AUTH_ON:
-            sc(S.bump, "question")
-            st.session_state.pop("_uc", None)
-            if st.session_state.get("used", "").startswith("perplexity"):
-                sc(S.bump, "perplexity")
+if q and answer:
+    if not chat["title"]:
+        chat["title"] = re.sub(r"\s+", " ", q).strip()[:40]
+    saved_q = q + (f"\n\n{t('file_note')}" + ", ".join(att_names) if att_names else "")
+    chat["messages"].append({"role": "user", "content": saved_q})
+    chat["messages"].append({"role": "assistant", "content": answer, "sources": srcs,
+                             "web": web_urls, "by": f"{t('answered')}: {by}"})
+    try:
+        S.save_chat(key, chat)
+        drop_chat_cache()
+        st.session_state.cid = chat["id"]
+        st.session_state["_chat"] = (key, chat["id"], time.time(), chat)
+    except store.SessionExpired:
+        drop_login()
+        st.rerun()
+    except Exception:
+        st.error(t("save_err"))
+    if _ckey and not _hit and not media:
+        ans_cache_put(_ckey, answer, srcs, by)
+    if AUTH_ON and not _hit:
+        sc(S.bump, "question")
+        st.session_state.pop("_uc", None)
+        if st.session_state.get("used", "").startswith("perplexity"):
+            sc(S.bump, "perplexity")
 
 # ---- yan paneldə söhbət siyahısı və yaddaş (cavabdan sonra çəkilir ki, yeni söhbət dərhal görünsün)
 with list_box:

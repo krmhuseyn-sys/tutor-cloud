@@ -211,32 +211,98 @@ def find_in_chat(title, messages, query):
     return None
 
 
-def schedule(card, grade, today=None):
-    """SM-2 tipli sadə cədvəl. grade: 0 Yenidən, 1 Çətin, 2 Yaxşı, 3 Asan. Yenilənən sahələri qaytarır."""
+# ---- FSRS (Free Spaced Repetition Scheduler, v4.5 standart parametrləri) ----
+# Hər kart üçün "sabitlik" (S, gün) və "çətinlik" (D, 1-10) saxlanılır. Növbəti təkrar elə vaxta qoyulur ki,
+# kartı xatırlama ehtimalı ~90% olsun. SM-2-dən fərqli olaraq unutma əyrisini nəzərə alır.
+FSRS_W = [0.4872, 1.4003, 3.7145, 13.8206, 5.1618, 1.2298, 0.8975, 0.031, 1.6474, 0.1367,
+          1.0461, 2.1072, 0.0793, 0.3246, 1.587, 0.2272, 2.8755]
+FSRS_RETENTION = 0.9
+_DECAY = -0.5
+_FACTOR = 19 / 81
+
+
+def _days_between(a, b):
+    try:
+        return (datetime.date.fromisoformat(str(b)[:10]) - datetime.date.fromisoformat(str(a)[:10])).days
+    except Exception:
+        return 0
+
+
+def _d0(g):
+    return min(10.0, max(1.0, FSRS_W[4] - (g - 3) * FSRS_W[5]))
+
+
+def fsrs_state(card, today=None):
+    """(S, D, son_təkrar) və ya yeni kart üçün None. Köhnə (SM-2) kartlar mövcud sahələrdən təxmin edilir."""
     today = today or baku_today()
+    s_, d_ = card.get("stability"), card.get("difficulty")
+    if s_ and d_:
+        last = card.get("last_review") or add_days(card.get("due") or today, -int(card.get("interval_days") or 0))
+        return float(s_), float(d_), last
+    reps = int(card.get("reps") or 0)
+    ivl = int(card.get("interval_days") or 0)
+    if reps == 0 and int(card.get("lapses") or 0) == 0:
+        return None
     ease = float(card.get("ease") or 2.5)
-    interval = int(card.get("interval_days") or 0)
+    d_ = min(10.0, max(1.0, 1 + (3.0 - ease) / 1.7 * 9))
+    s_ = max(0.5, float(ivl or 1))
+    last = add_days(card.get("due") or today, -ivl)
+    return s_, d_, last
+
+
+def retrievability(card, today=None):
+    """Kartı indi xatırlama ehtimalı (0-1). Yeni kart üçün None."""
+    st_ = fsrs_state(card, today)
+    if not st_:
+        return None
+    s_, _d, last = st_
+    t = max(0, _days_between(last, today or baku_today()))
+    return (1 + _FACTOR * t / s_) ** _DECAY
+
+
+def schedule(card, grade, today=None):
+    """FSRS cədvəli. grade: 0 Yenidən, 1 Çətin, 2 Yaxşı, 3 Asan. Yenilənən sahələri qaytarır.
+    ease/interval_days/reps/lapses köhnə hissələr (panel, zəif kartlar) üçün də yenilənir."""
+    import math
+    today = today or baku_today()
+    w = FSRS_W
+    g = max(1, min(4, int(grade) + 1))
     reps = int(card.get("reps") or 0)
     lapses = int(card.get("lapses") or 0)
-    if grade <= 0:
+    st_ = fsrs_state(card, today)
+    if st_ is None:
+        s_new = w[g - 1]
+        d_new = _d0(g)
+    else:
+        s_, d_, last = st_
+        t = max(0, _days_between(last, today))
+        r = (1 + _FACTOR * t / s_) ** _DECAY
+        d_new = d_ - w[6] * (g - 3)
+        d_new = min(10.0, max(1.0, w[7] * _d0(3) + (1 - w[7]) * d_new))
+        if g == 1:
+            s_new = w[11] * d_ ** (-w[12]) * ((s_ + 1) ** w[13] - 1) * math.exp(w[14] * (1 - r))
+            s_new = min(s_new, s_)
+        else:
+            hard = w[15] if g == 2 else 1.0
+            easy = w[16] if g == 4 else 1.0
+            s_new = s_ * (math.exp(w[8]) * (11 - d_) * s_ ** (-w[9]) * (math.exp(w[10] * (1 - r)) - 1) * hard * easy + 1)
+    s_new = max(0.1, min(s_new, 36500.0))
+    if g == 1:
         lapses += 1
         reps = 0
         interval = 0
-        ease = max(1.3, ease - 0.2)
         due = today
     else:
-        if grade == 1:
-            interval = max(1, round(interval * 1.2)) if reps else 1
-            ease = max(1.3, ease - 0.15)
-        elif grade == 2:
-            interval = 1 if reps == 0 else (3 if reps == 1 else max(interval + 1, round(interval * ease)))
-        else:
-            interval = 3 if reps == 0 else max(interval + 2, round(max(interval, 1) * ease * 1.3))
-            ease = min(3.0, ease + 0.15)
         reps += 1
-        interval = min(interval, 365)
+        interval = s_new / _FACTOR * (FSRS_RETENTION ** (1 / _DECAY) - 1)
+        interval = int(min(365, max(1, round(interval))))
         due = add_days(today, interval)
-    return {"ease": round(ease, 2), "interval_days": interval, "reps": reps, "lapses": lapses, "due": due}
+    ease = round(3.0 - (d_new - 1) / 9 * 1.7, 2)
+    return {"ease": ease, "interval_days": interval, "reps": reps, "lapses": lapses, "due": due,
+            "stability": round(s_new, 4), "difficulty": round(d_new, 4), "last_review": today}
+
+
+FSRS_COLS = ("stability", "difficulty", "last_review")
 
 
 def streak(activity, today=None):
@@ -919,6 +985,9 @@ class SupabaseStore:
                 x["body"] = msg_decrypt(r.get("conversation_id"), x.get("body"))
         return reps
 
+    def owner_class_insights(self, subject, days=28):
+        return self._msg("owner_class_insights", {"p_subject": str(subject)[:20], "p_days": int(days)})
+
     def owner_security_log(self, limit=40):
         return self._msg("owner_security_log", {"p_limit": int(limit)}) or []
 
@@ -1028,9 +1097,20 @@ class SupabaseStore:
         return ((self._db().table("cards").select("*").eq("subject", key)
                  .order("created_at", desc=True).limit(limit).execute().data) or [])
 
+    _fsrs_cols = True
+
     def review_card(self, key, card, grade):
         new = schedule(card, grade)
-        self._db().table("cards").update(new).eq("id", card["id"]).execute()
+        row = new if SupabaseStore._fsrs_cols else {k: v for k, v in new.items() if k not in FSRS_COLS}
+        try:
+            self._db().table("cards").update(row).eq("id", card["id"]).execute()
+        except SessionExpired:
+            raise
+        except Exception as e:
+            if not SupabaseStore._fsrs_cols or not any(c in str(e) for c in FSRS_COLS):
+                raise
+            SupabaseStore._fsrs_cols = False  # study.sql hələ işlədilməyib: köhnə sütunlarla davam
+            self._db().table("cards").update({k: v for k, v in new.items() if k not in FSRS_COLS}).eq("id", card["id"]).execute()
         return new
 
     def delete_card(self, key, card_id):
