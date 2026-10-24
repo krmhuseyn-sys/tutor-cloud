@@ -1,9 +1,11 @@
+# Dəqiq versiyalar: bulud hər dəfə eyni kitabxanaları qurur, gözlənilməz yeniləmə tətbiqi qırmır.
+# Yeniləmək üçün: ayda bir dəfə versiyanı burada dəyiş, lokalda yoxla, sonra publish et.
 streamlit==1.64.0
 google-genai==2.26.0
 chromadb==1.5.9
 pymupdf==1.28.2
 openai==3.24.0
 edge-tts==7.3.1
-supabase>=2.0
-reportlab>=4.0
-cryptography>=42.0
+supabase==2.33.0
+reportlab==5.0.1
+cryptography==50.0.2
