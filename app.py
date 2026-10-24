@@ -5485,6 +5485,7 @@ def settings_cat_ui(cat, key, opts, choice):
             theme_select()
             wide(st.button, ("✓ " if st.session_state.get("rd_mode") else "") + ct("rd_mode"), key="rd_btn",
                  type="primary" if st.session_state.get("rd_mode") else "secondary", on_click=cb_rd, args=(S,))
+            wide(st.button, ct("tour_again"), key="tour_again", on_click=cb_tour_again)
     elif cat == "profile":
         with st.container(border=True):
             sec(ct("set_g_avatar"))
@@ -5842,6 +5843,80 @@ def msg_actions(S_, info, buf):
                 st.rerun()
 
 
+def cb_deck_add(S_, deck_id):
+    d = sc(S_.deck_get, deck_id, default=None)
+    if not d or not d.get("cards"):
+        st.session_state["deck_msg"] = ("warn", ct("dk_bad"))
+        return
+    subj = d.get("subject") if d.get("subject") in SUBJ_KEYS else "gen"
+    n = sc(S_.add_cards, subj, d["cards"], default=0) or 0
+    st.session_state["deck_msg"] = ("ok", ct("dk_added", n=n, s=subj_name(subj)) if n else ct("dk_added0"))
+
+
+def cb_deck_del(S_, deck_id):
+    sc(S_.deck_delete, deck_id)
+
+
+def msg_decks_ui(S_, info):
+    """Qrupda (və ya dostla) kart dəsti paylaşmaq və başqasının dəstini öz kartlarına əlavə etmək."""
+    cid = info["id"]
+    try:
+        decks = S_.deck_list(cid)
+    except store.SessionExpired:
+        drop_login()
+        st.rerun()
+        return
+    except Exception:
+        decks = None
+    with st.expander(ct("dk_title") + (f" ({len(decks)})" if decks else "")):
+        if decks is None:
+            st.caption(ct("dk_need_sql"))
+            return
+        fl = st.session_state.pop("deck_msg", None)
+        if fl:
+            (st.success if fl[0] == "ok" else st.warning)(fl[1])
+        if not decks:
+            st.caption(ct("dk_none"))
+        for d in decks:
+            a, b = hcols("dk_" + str(d.get("id"))[:12], [3, 2])
+            subj = d.get("subject") if d.get("subject") in SUBJ_KEYS else "gen"
+            a.markdown(f"**{_e(d.get('title') or '')}**  \n<small>@{_e(d.get('username', ''))} · {_e(subj_name(subj))} · "
+                       f"{int(d.get('n_cards') or 0)} {ct('dk_cards')} · {_e(msg_time(d.get('at')))}</small>",
+                       unsafe_allow_html=True)
+            with b:
+                if d.get("mine"):
+                    wide(st.button, ct("nb_del"), key="dk_del_" + str(d.get("id")), on_click=cb_deck_del,
+                         args=(S_, d.get("id")))
+                else:
+                    wide(st.button, ct("dk_add"), key="dk_add_" + str(d.get("id")), type="primary",
+                         on_click=cb_deck_add, args=(S_, d.get("id")), help=ct("dk_add_help"))
+        st.divider()
+        sec(ct("dk_share"))
+        subj = st.selectbox(t("subject"), SUBJ_KEYS, format_func=subj_name, key="dk_subj_" + cid)
+        flt = st.text_input(ct("dk_filter"), key="dk_flt_" + cid, max_chars=60, placeholder=ct("dk_filter_ph"))
+        n = st.select_slider(ct("dk_n"), options=[10, 20, 50, 100, 200, 300], value=50, key="dk_n_" + cid)
+        title = st.text_input(ct("dk_name"), key="dk_name_" + cid, max_chars=150,
+                              placeholder=ct("dk_name_ph", s=subj_name(subj)))
+        if wide(st.button, ct("dk_send"), key="dk_send_" + cid, type="primary"):
+            cards = sc(S_.list_cards, subj, 1000, default=[]) or []
+            low = (flt or "").strip().lower()
+            if low:
+                cards = [c for c in cards if low in (str(c.get("front")) + " " + str(c.get("back"))).lower()]
+            cards = cards[:int(n)]
+            if not cards:
+                st.warning(ct("dk_empty"))
+            else:
+                nm = (title or "").strip() or ct("dk_name_ph", s=subj_name(subj))
+                r = sc(S_.deck_share, cid, subj, nm, cards, default={}) or {}
+                if r.get("ok"):
+                    sc(S_.msg_send, cid, ct("dk_msg", t=nm, n=len(cards)))
+                    st.session_state["deck_msg"] = ("ok", ct("dk_sent", n=len(cards)))
+                    st.session_state.pop("mb_" + cid, None)
+                    st.rerun()
+                else:
+                    st.warning(msg_err(r.get("error")) if r.get("error") != "empty" else ct("dk_empty"))
+
+
 def msg_conv_view(S_, info):
     cid = info["id"]
     is_group = info.get("kind") == "group"
@@ -5861,6 +5936,7 @@ def msg_conv_view(S_, info):
     msg_feed(S_, cid)
     st.caption(ct("m_live"))
     msg_actions(S_, info, st.session_state.get("mb_" + cid))
+    msg_decks_ui(S_, info)
     if is_group:
         if st.toggle(ct("m_members"), key="m_show_members_" + cid):
             mem = sc(S_.msg_members, cid, default=[]) or []
@@ -6089,6 +6165,70 @@ def owner_msg_reports_ui(S_):
                 st.rerun()
 
 
+# ======================= İLK GİRİŞ TURU =======================
+TOUR_KEYS = ["tour1", "tour2", "tour3", "tour4", "tour5"]
+
+
+def cb_tour_again():
+    st.session_state["tour_show"] = True
+    st.session_state["tour_i"] = 0
+
+
+def cb_tour_step(d):
+    st.session_state["tour_i"] = max(0, min(len(TOUR_KEYS) - 1, st.session_state.get("tour_i", 0) + d))
+
+
+def _tour_content():
+    ss = st.session_state
+    i = max(0, min(len(TOUR_KEYS) - 1, ss.get("tour_i", 0)))
+    dots = "".join(
+        f'<i style="display:inline-block;width:{22 if j == i else 8}px;height:8px;border-radius:99px;margin-right:6px;'
+        f'background:{"linear-gradient(90deg,var(--tk-accent),var(--tk-accent2))" if j <= i else "var(--tk-border)"}"></i>'
+        for j in range(len(TOUR_KEYS)))
+    st.markdown(f'<div style="margin:2px 0 10px">{dots}</div>', unsafe_allow_html=True)
+    st.markdown(f"#### {ct(TOUR_KEYS[i] + '_t')}")
+    st.markdown(ct(TOUR_KEYS[i] + "_b"))
+    st.caption(ct("tour_step", i=i + 1, n=len(TOUR_KEYS)))
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        if i > 0:
+            wide(st.button, ct("tour_back"), key="tour_back", on_click=cb_tour_step, args=(-1,))
+    with c2:
+        if i < len(TOUR_KEYS) - 1 and wide(st.button, ct("tour_skip"), key="tour_skip"):
+            st.rerun()
+    with c3:
+        if i < len(TOUR_KEYS) - 1:
+            wide(st.button, ct("tour_next"), key="tour_next", type="primary", on_click=cb_tour_step, args=(1,))
+        elif wide(st.button, ct("tour_done"), key="tour_done", type="primary"):
+            st.rerun()
+
+
+if hasattr(st, "dialog"):
+    _tour_dialog = st.dialog("Tutor Komandam", width="large")(_tour_content)
+else:  # köhnə Streamlit: pəncərə yoxdur, səhifənin yuxarısında göstərilir
+    def _tour_dialog():
+        with st.container(border=True):
+            _tour_content()
+
+
+def tour_maybe(S_):
+    """Tur ilk girişdə bir dəfə avtomatik açılır; sonra Ayarlar > İnterfeys-dən yenidən açmaq olar."""
+    ss = st.session_state
+    if ss.pop("tour_show", False):
+        _tour_dialog()
+        return
+    if ss.get("tour_checked"):
+        return
+    ss["tour_checked"] = True
+    p = get_prefs(S_)
+    if p.get("tour_done"):
+        return
+    p["tour_done"] = 1
+    save_prefs(S_)
+    ss["tour_i"] = 0
+    _tour_dialog()
+
+
 def cb_choice():
     st.session_state["set_choice"] = st.session_state.get("w_choice", "smart")
 
@@ -6183,6 +6323,8 @@ with foot_box:
         with _c:
             wide(st.button, ct("view_" + _v), key=f"nav_{_v}",
                  type="primary" if view == _v else "secondary", on_click=cb_view, args=(_v,))
+
+tour_maybe(S)
 
 if view == "memory":
     memory_page(key)
@@ -6285,17 +6427,37 @@ for i, m in enumerate(chat["messages"]):
                 quick_follow(key, chat["id"])
 
 _bottom = getattr(st, "bottom", None) or getattr(st, "_bottom", None)
+_audio = None
+
+
+def mic_toggle():
+    """Sual xanasının yanında səsli söhbəti bir kliklə açıb-bağlamaq."""
+    on = bool(st.session_state.get("tg_vchat"))
+    kw = dict(key="vc_tgl", help=ct("vc_off_help") if on else ct("vc_on_help"),
+              type="primary" if on else "secondary", on_click=_flip, args=("tg_vchat",))
+    try:
+        st.button("", icon=":material/mic_off:" if on else ":material/mic:", **kw)
+    except TypeError:
+        st.button(ct("vc_short"), **kw)
+
+
 if _bottom is not None:
     with _bottom:
+        if voice_in:  # mikrofon sual xanasının düz üstündədir: danış, dayandır, cavab gəlir
+            _audio = st.audio_input(t("mic_hint"), key=f"mic_{st.session_state.mic_n}", label_visibility="collapsed")
+            if vchat:
+                st.caption(ct("vc_hint"))
         att_ph = st.empty()
         if st.session_state.att_list:
             att_ph.caption(t("att_added") + ", ".join(a["name"] for a in st.session_state.att_list))
         try:
-            c_att, c_in = st.columns([1, 14], vertical_alignment="bottom")
+            c_att, c_mic, c_in = st.columns([1, 1, 13], vertical_alignment="bottom")
         except TypeError:
-            c_att, c_in = st.columns([1, 14])
+            c_att, c_mic, c_in = st.columns([1, 1, 13])
         with c_att:
             attach_menu()
+        with c_mic:
+            mic_toggle()
         with c_in:
             q = st.chat_input(t("feynman_ph") if mode == "feynman" else t("ask_ph"))
 else:  # köhnə Streamlit: ➕ sual xanasının üstündə
@@ -6319,8 +6481,11 @@ elif not chat["messages"] and not q:
             wide(st.button, txt_, key=f"sg_{key}_{i_}", on_click=cb_sugg, args=(txt_,))
 
 if voice_in:
-    with st.expander(t("mic"), expanded=True):
-        audio = st.audio_input(t("mic_hint"), key=f"mic_{st.session_state.mic_n}")
+    if _bottom is not None:
+        audio = _audio
+    else:  # köhnə Streamlit: aşağı panel yoxdur
+        with st.expander(t("mic"), expanded=True):
+            audio = st.audio_input(t("mic_hint"), key=f"mic_{st.session_state.mic_n}")
     if audio is not None:
         raw = audio.getvalue()
         h = hashlib.md5(raw).hexdigest()

@@ -869,6 +869,49 @@ class SupabaseStore:
         r = self._msg("msg_report", {"p_message_id": int(mid), "p_reason": (reason or "")[:300]})
         return r if isinstance(r, dict) else {"ok": False, "error": "unknown"}
 
+    # ---- qrupda paylaşılan kart dəstləri (başlıq və kartlar söhbət açarı ilə şifrələnir)
+    def deck_share(self, conv, subject, title, cards):
+        clean = []
+        for c in list(cards or [])[:300]:
+            c = clean_card(c)
+            if c:
+                clean.append({k: c[k] for k in ("front", "back", "src", "page") if c.get(k) not in (None, "")})
+        if not clean:
+            return {"ok": False, "error": "empty"}
+        try:
+            enc_title = msg_encrypt(conv, str(title or "")[:150])
+            enc_body = msg_encrypt(conv, json.dumps(clean, ensure_ascii=False))
+        except MsgKeyMissing:
+            return {"ok": False, "error": "no_key"}
+        r = self._msg("msg_deck_share", {"p_conv": conv, "p_subject": str(subject)[:20], "p_title": enc_title,
+                                         "p_payload": enc_body, "p_n": len(clean)})
+        return r if isinstance(r, dict) else {"ok": False, "error": "unknown"}
+
+    def deck_list(self, conv):
+        rows = self._msg("msg_deck_list", {"p_conv": conv}) or []
+        for r in rows:
+            r["title"] = msg_decrypt(conv, r.get("title"))
+        return rows
+
+    def deck_get(self, deck_id):
+        d = self._msg("msg_deck_get", {"p_id": str(deck_id)})
+        if not isinstance(d, dict):
+            return None
+        conv = d.get("conversation_id")
+        try:
+            cards = json.loads(msg_decrypt(conv, d.get("payload")))
+        except Exception:
+            return None
+        out = []
+        for c in cards if isinstance(cards, list) else []:
+            c = clean_card(c) if isinstance(c, dict) else None
+            if c:
+                out.append(c)
+        return {"subject": d.get("subject"), "title": msg_decrypt(conv, d.get("title")), "cards": out[:300]}
+
+    def deck_delete(self, deck_id):
+        self._msg("msg_deck_delete", {"p_id": str(deck_id)})
+
     def owner_msg_reports(self):
         reps = self._msg("owner_msg_reports") or []
         for r in reps:

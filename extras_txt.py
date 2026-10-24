@@ -322,8 +322,8 @@ _T.update({
     # --- dəftər (saxlanmış cavablar)
     "view_notebook": ("Dəftər", "Notebook", "Тетрадь"),
     "nb_title": ("Dəftər", "Notebook", "Тетрадь"),
-    "nb_star": ("Dəftərə", "Save", "В тетрадь"),
-    "nb_star_on": ("Dəftərdə", "Saved", "В тетради"),
+    "nb_star": ("Dəftər", "Notebook", "Тетрадь"),
+    "nb_star_on": ("Dəftərdə", "In notebook", "В тетради"),
     "nb_star_help": ("Bu cavabı fənnin dəftərinə saxla (yenidən bassan, çıxarılır)",
                      "Save this answer to the subject notebook (press again to remove)",
                      "Сохранить ответ в тетрадь предмета (повторное нажатие убирает)"),
@@ -335,9 +335,9 @@ _T.update({
     "nb_need_sql": ("Dəftər və sınaq imtahanı üçün study.sql Supabase-də işlədilməlidir.",
                     "Run study.sql in Supabase to use the notebook and practice exams.",
                     "Для тетради и пробного экзамена нужно выполнить study.sql в Supabase."),
-    "nb_empty": ("Dəftər hələ boşdur. Söhbətdə bəyəndiyin cavabın altındakı \"Dəftərə\" düyməsini bas, burada toplanacaq.",
-                 "The notebook is empty. Press \"Save\" under an answer you like in the chat and it will appear here.",
-                 "Тетрадь пока пуста. Нажми \"В тетрадь\" под понравившимся ответом в чате, и он появится здесь."),
+    "nb_empty": ("Dəftər hələ boşdur. Söhbətdə bəyəndiyin cavabın altındakı \"Dəftər\" düyməsini bas, burada toplanacaq.",
+                 "The notebook is empty. Press \"Notebook\" under an answer you like in the chat and it will appear here.",
+                 "Тетрадь пока пуста. Нажми \"Тетрадь\" под понравившимся ответом в чате, и он появится здесь."),
     "nb_count": ("Bu fəndə {n} saxlanmış cavab var.", "{n} saved answers in this subject.",
                  "Сохранённых ответов по предмету: {n}."),
     "nb_search": ("Dəftərdə axtar", "Search the notebook", "Поиск в тетради"),
@@ -459,6 +459,130 @@ _T.update({
     "mk_missing": ("Çatışmayan", "Missing", "Не хватает"),
     "mk_model": ("Nümunə cavab", "Model answer", "Образец ответа"),
     "mk_save_q": ("Dəftərə saxla", "Save to notebook", "В тетрадь"),
+})
+
+
+_T.update({
+    # --- ilk giriş turu
+    "tour_again": ("Tanıtım turunu yenidən göstər", "Show the welcome tour again", "Показать обзор снова"),
+    "tour_step": ("Addım {i}/{n}", "Step {i}/{n}", "Шаг {i}/{n}"),
+    "tour_back": ("Geri", "Back", "Назад"),
+    "tour_skip": ("Keç", "Skip", "Пропустить"),
+    "tour_next": ("İrəli", "Next", "Далее"),
+    "tour_done": ("Başlayaq", "Let's start", "Начнём"),
+    "tour1_t": ("Xoş gəldin!", "Welcome!", "Добро пожаловать!"),
+    "tour1_b": ("Bu, kurs fənlərin üçün şəxsi tutorundur.\n\n"
+                "- **Sol paneldə fənni seç:** 5 kurs fənni və ümumi köməkçi var.\n"
+                "- Sual yaz, şəkil və ya PDF əlavə et, tutor addım-addım izah etsin.\n"
+                "- Gündə **40 sual** limiti var ki, tətbiq hamı üçün pulsuz qalsın.",
+                "This is your personal tutor for your courses.\n\n"
+                "- **Pick a subject in the left panel:** 5 courses and a general assistant.\n"
+                "- Ask a question, attach a photo or a PDF, and the tutor explains step by step.\n"
+                "- There is a limit of **40 questions a day** so the app stays free for everyone.",
+                "Это твой личный тьютор по предметам.\n\n"
+                "- **Выбери предмет слева:** 5 курсов и общий помощник.\n"
+                "- Задай вопрос, прикрепи фото или PDF, и тьютор объяснит по шагам.\n"
+                "- Лимит **40 вопросов в день**, чтобы приложение оставалось бесплатным."),
+    "tour2_t": ("Dörd rejim", "Four modes", "Четыре режима"),
+    "tour2_b": ("Sol paneldə rejimi seç:\n\n"
+                "- **İzah:** mövzunu sadə dillə öyrədir.\n"
+                "- **Praktika:** tapşırıq verir, cavabını yoxlayır.\n"
+                "- **İmtahan:** imtahan kimi sual verir, ipucu vermir.\n"
+                "- **Feynman:** sən izah edirsən, tutor boşluqları tapır. Ən güclü öyrənmə üsuludur.",
+                "Choose a mode in the left panel:\n\n"
+                "- **Learn:** explains the topic in plain words.\n"
+                "- **Practice:** gives exercises and checks your answer.\n"
+                "- **Exam:** asks exam-style questions without hints.\n"
+                "- **Feynman:** you explain, the tutor finds the gaps. The strongest way to learn.",
+                "Выбери режим слева:\n\n"
+                "- **Объяснение:** простыми словами о теме.\n"
+                "- **Практика:** задания и проверка ответа.\n"
+                "- **Экзамен:** вопросы как на экзамене, без подсказок.\n"
+                "- **Фейнман:** объясняешь ты, тьютор находит пробелы. Самый сильный способ учиться."),
+    "tour3_t": ("Cavabın altındakı düymələr", "Buttons under each answer", "Кнопки под ответом"),
+    "tour3_b": ("- **Sadə izah et / Misal ver / Məni yoxla:** bir kliklə növbəti sual.\n"
+                "- **Dəftər:** yaxşı cavabı saxla. Dəftərdən imtahan konspekti də hazırlamaq olar.\n"
+                "- **Kart:** cavabdan təkrar kartları yaradır.\n"
+                "- **Oxu:** cavabı səslə dinlə.",
+                "- **Simpler / Example / Quiz me:** the next question in one click.\n"
+                "- **Notebook:** save a good answer. The notebook can also make a revision sheet.\n"
+                "- **Card:** turns the answer into flashcards.\n"
+                "- **Read:** listen to the answer.",
+                "- **Проще / Пример / Проверь меня:** следующий вопрос в один клик.\n"
+                "- **Тетрадь:** сохрани хороший ответ. Из тетради можно сделать конспект.\n"
+                "- **Карточка:** превращает ответ в карточки.\n"
+                "- **Озвучить:** послушай ответ."),
+    "tour4_t": ("İmtahana hazırlıq", "Exam preparation", "Подготовка к экзамену"),
+    "tour4_b": ("- **Kartlar:** gündəlik təkrar, test və vaxtlı imtahan.\n"
+                "- **Plan:** imtahan tarixini yaz, tutor mövzuları günlərə bölür. Xülasə və mövzu xəritəsi də burdadır.\n"
+                "- **Sınaq imtahanı:** müəllimin keçmiş imtahanını yüklə, tutor eyni üslubda yeni suallar hazırlayıb yoxlasın.\n"
+                "- **Panel:** seriyan və irəliləyişin.",
+                "- **Cards:** daily review, quizzes and timed exams.\n"
+                "- **Plan:** set your exam date and the tutor spreads the topics over the days. Summaries and mind maps live here too.\n"
+                "- **Practice exam:** upload your teacher's past exam and get new questions in the same style, graded.\n"
+                "- **Stats:** your streak and progress.",
+                "- **Карточки:** ежедневное повторение, тесты и экзамен на время.\n"
+                "- **План:** укажи дату экзамена, и тьютор распределит темы по дням. Конспекты и карты тем тоже здесь.\n"
+                "- **Пробный экзамен:** загрузи прошлый экзамен преподавателя и получи новые вопросы в том же стиле с проверкой.\n"
+                "- **Статистика:** серия дней и прогресс."),
+    "tour5_t": ("Sinif yoldaşları və təhlükəsizlik", "Classmates and safety", "Одногруппники и безопасность"),
+    "tour5_b": ("- **Mesajlar:** qrup yarat (məsələn fin26), kodla qoşul, dostlarınla yaz. Pis davranışı şikayət et.\n"
+                "- **Heç kim** (müəllim və ya tətbiq sahibi adından belə) səndən parol və ya kod istəməməlidir.\n"
+                "- Hesabını daha güclü qorumaq üçün: **Ayarlar > Profil > Authenticator**.\n"
+                "- Bu turu istənilən vaxt **Ayarlar > İnterfeys**-dən yenidən aça bilərsən.",
+                "- **Messages:** create a group (e.g. fin26), join with a code, chat with friends. Report bad behaviour.\n"
+                "- **Nobody** (not even in the name of a teacher or the app owner) should ask for your password or codes.\n"
+                "- For stronger protection: **Settings > Profile > Authenticator**.\n"
+                "- You can open this tour again any time in **Settings > Interface**.",
+                "- **Сообщения:** создай группу (например fin26), вступай по коду, пиши друзьям. Жалуйся на плохое поведение.\n"
+                "- **Никто** (даже от имени преподавателя или владельца) не должен просить пароль или коды.\n"
+                "- Для сильной защиты: **Настройки > Профиль > Authenticator**.\n"
+                "- Этот обзор можно открыть снова в **Настройки > Интерфейс**."),
+})
+
+
+_T.update({
+    # --- paylaşılan kart dəstləri
+    "dk_title": ("Kart dəstləri", "Card decks", "Наборы карточек"),
+    "dk_need_sql": ("Kart dəstləri üçün study.sql Supabase-də işlədilməlidir.", "Run study.sql in Supabase to share card decks.",
+                    "Для наборов карточек нужно выполнить study.sql в Supabase."),
+    "dk_none": ("Hələ paylaşılan dəst yoxdur.", "No decks shared yet.", "Наборов пока нет."),
+    "dk_cards": ("kart", "cards", "карточек"),
+    "dk_add": ("Kartlarıma əlavə et", "Add to my cards", "Добавить себе"),
+    "dk_add_help": ("Dəstdəki kartlar sənin kartlarına əlavə olunur (artıq olanlar təkrarlanmır)",
+                    "The cards are added to yours (duplicates are skipped)",
+                    "Карточки добавятся к твоим (повторы пропускаются)"),
+    "dk_added": ("{n} kart \"{s}\" fənninə əlavə olundu. Kartlar bölməsində təkrar et.",
+                 "{n} cards added to \"{s}\". Review them in Cards.",
+                 "{n} карточек добавлено в \"{s}\". Повтори их в Карточках."),
+    "dk_added0": ("Bu kartların hamısı səndə artıq var.", "You already have all these cards.", "Все эти карточки у тебя уже есть."),
+    "dk_bad": ("Dəst açılmadı.", "Could not open the deck.", "Не удалось открыть набор."),
+    "dk_share": ("Öz kartlarını paylaş", "Share your cards", "Поделиться карточками"),
+    "dk_filter": ("Yalnız bu sözü olan kartlar (istəyə bağlı)", "Only cards containing (optional)",
+                  "Только карточки со словом (необязательно)"),
+    "dk_filter_ph": ("məsələn: fürsət xərci", "e.g. opportunity cost", "например: альтернативная стоимость"),
+    "dk_n": ("Ən çox neçə kart", "Max number of cards", "Сколько карточек максимум"),
+    "dk_name": ("Dəstin adı", "Deck name", "Название набора"),
+    "dk_name_ph": ("{s} kartları", "{s} cards", "Карточки: {s}"),
+    "dk_send": ("Dəsti paylaş", "Share the deck", "Поделиться набором"),
+    "dk_empty": ("Bu fənndə uyğun kart yoxdur.", "No matching cards in this subject.", "В этом предмете нет подходящих карточек."),
+    "dk_sent": ("{n} kartlıq dəst paylaşıldı.", "Shared a deck of {n} cards.", "Набор из {n} карточек отправлен."),
+    "dk_msg": ("[Kart dəsti] {t}: {n} kart. Aşağıdakı \"Kart dəstləri\" bölməsindən əlavə et.",
+               "[Card deck] {t}: {n} cards. Add it from \"Card decks\" below.",
+               "[Набор карточек] {t}: {n} шт. Добавь его в разделе \"Наборы карточек\" ниже."),
+})
+
+
+_T.update({
+    # --- səsli söhbət düyməsi
+    "vc_short": ("Səs", "Voice", "Голос"),
+    "vc_on_help": ("Səsli söhbəti aç: danış, tutor səslə və qısa cavab versin",
+                   "Turn on voice chat: speak and the tutor answers aloud, briefly",
+                   "Включить голосовой чат: говори, тьютор ответит голосом и кратко"),
+    "vc_off_help": ("Səsli söhbəti bağla", "Turn off voice chat", "Выключить голосовой чат"),
+    "vc_hint": ("Səsli söhbət açıqdır: mikrofona bas, danış, sonra dayandır. Tutor cavabı səslə oxuyacaq. Hər dəfə mikrofona yenidən bas (brauzer təhlükəsizlik üçün mikrofonu özü açmağa icazə vermir).",
+                "Voice chat is on: tap the mic, speak, then stop. The tutor will read the answer aloud. Tap the mic again each time (browsers do not let pages start the mic by themselves).",
+                "Голосовой чат включён: нажми на микрофон, говори, затем останови. Тьютор прочитает ответ вслух. Каждый раз нажимай на микрофон снова (браузер не даёт странице включать его самой)."),
 })
 
 
