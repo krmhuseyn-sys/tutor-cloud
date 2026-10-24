@@ -300,6 +300,24 @@ _T.update({
 })
 
 
+_T.update({
+    # --- cavabın altında sürətli düymələr
+    "qf_simple": ("Sadə izah et", "Simpler", "Проще"),
+    "qf_example": ("Misal ver", "Example", "Пример"),
+    "qf_quiz": ("Məni yoxla", "Quiz me", "Проверь меня"),
+    "qf_simple_q": ("Bunu daha sadə izah et, gündəlik həyatdan bir misalla.",
+                    "Explain that more simply, with an everyday example.",
+                    "Объясни это проще, на примере из жизни."),
+    "qf_example_q": ("Buna aid bir konkret misal ver və addım-addım izah et.",
+                     "Give me one concrete example of this and walk me through it step by step.",
+                     "Приведи конкретный пример и разбери его по шагам."),
+    "qf_quiz_q": ("Bu mövzu üzrə məni yoxla: mənə bir sual ver və cavabımı gözlə.",
+                  "Quiz me on this: ask me one question and wait for my answer.",
+                  "Проверь меня по этой теме: задай один вопрос и дождись моего ответа."),
+})
+
+
+
 def add(d):
     _T.update(d)
 

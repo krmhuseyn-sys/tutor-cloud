@@ -1441,6 +1441,16 @@ if lang_ru:
 SUGG = noemo(SUGG)
 
 
+def quick_follow(key, cid):
+    """Son cavabın altında bir kliklə növbəti sual: sadə izah, misal, yoxlama."""
+    lang_ = "en" if key in EN_SUBJ else ("az" if key in AZ_SUBJ else st.session_state.get("ui", "az"))
+    send = CT.get(lang_, CT["az"])
+    cols = hcols(f"qf_{cid}", 3)
+    for c_, k_ in zip(cols, ("qf_simple", "qf_example", "qf_quiz")):
+        with c_:
+            wide(st.button, ct(k_), key=f"{k_}_{cid}", on_click=cb_sugg, args=(send.get(k_ + "_q", ct(k_ + "_q")),))
+
+
 def cb_sugg(text):
     st.session_state["pending_q"] = text
 
@@ -5408,6 +5418,8 @@ for i, m in enumerate(chat["messages"]):
                         on_click=cb_fb, args=(S, key, chat["id"], i, -1, _q_prev, m["content"]))
             b_dl.download_button(ct("act_dl"), data=answer_md(_q_prev, m, key), file_name="tutor_cavab.md",
                                  mime="text/markdown", key=f"dl_{chat['id']}_{i}", help=ct("dl_answer"))
+            if i == len(chat["messages"]) - 1 and mode != "feynman":
+                quick_follow(key, chat["id"])
 
 _bottom = getattr(st, "bottom", None) or getattr(st, "_bottom", None)
 if _bottom is not None:
