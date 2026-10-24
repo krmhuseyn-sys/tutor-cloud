@@ -38,8 +38,32 @@ THEMES = {
         text="#3A1F2B", muted="#7D5A68", accent="#D6336C", on_accent="#FFFFFF", accent2="#F08C00",
         border="rgba(58,31,43,0.16)", head="'Poppins', 'Inter', sans-serif",
     ),
+    "ocean": dict(
+        az="Okean", en="Ocean", ru="Океан", dark=True,
+        bg="#06161F", bg2="#0A2633", surface="#0D2230", surface2="#122D3C",
+        text="#E2F1F6", muted="#92B4C2", accent="#2EC4D6", on_accent="#03222A", accent2="#FF8A65",
+        border="rgba(226,241,246,0.15)", head="'Space Grotesk', 'Inter', sans-serif",
+    ),
+    "lavender": dict(
+        az="Lavanda", en="Lavender", ru="Лаванда", dark=False,
+        bg="#F8F5FF", bg2="#ECE5FF", surface="#FFFFFF", surface2="#F2EDFF",
+        text="#2A2340", muted="#685F84", accent="#6D4AE8", on_accent="#FFFFFF", accent2="#DB2777",
+        border="rgba(42,35,64,0.14)", head="'Poppins', 'Inter', sans-serif",
+    ),
+    "espresso": dict(
+        az="Qəhvə", en="Espresso", ru="Эспрессо", dark=True,
+        bg="#15100D", bg2="#231913", surface="#1E1712", surface2="#2A2019",
+        text="#F3E9DF", muted="#BCA694", accent="#E0A458", on_accent="#2A1A08", accent2="#D0654C",
+        border="rgba(243,233,223,0.14)", head="'Fraunces', Georgia, serif",
+    ),
+    "nord": dict(
+        az="Şimal", en="Nord", ru="Север", dark=True,
+        bg="#1D2129", bg2="#252B37", surface="#242A35", surface2="#2D3441",
+        text="#ECEFF4", muted="#A3ADBF", accent="#88C0D0", on_accent="#0F2229", accent2="#C7A0C0",
+        border="rgba(236,239,244,0.14)", head="'Inter', sans-serif",
+    ),
 }
-ORDER = ["teal", "forest", "midnight", "paper", "sunset"]
+ORDER = ["teal", "forest", "midnight", "paper", "sunset", "ocean", "lavender", "espresso", "nord"]
 
 
 def valid_theme(name):
@@ -487,6 +511,48 @@ div:has(> [role="listbox"]), div:has(> div > [role="listbox"]) {{
 [data-testid="stPopoverBody"] {{
   background:var(--tk-surface) !important; color:var(--tk-text) !important;
   border:1px solid var(--tk-border) !important; border-radius:16px !important; box-shadow:var(--tk-shadow);
+}}
+/* Pəncərə (st.dialog, məsələn tanıtım turu): .stApp-dan kənarda çəkilir, ona görə ayrıca tema verilir */
+[data-testid="stDialog"] [role="dialog"], div[role="dialog"][aria-modal="true"] {{
+  background:var(--tk-surface) !important; background-color:var(--tk-surface) !important; color:var(--tk-text) !important;
+  border:1px solid var(--tk-border) !important; border-radius:22px !important;
+  box-shadow:0 24px 70px rgba(0,0,0,.35), 0 0 0 1px color-mix(in srgb, var(--tk-accent) 18%, transparent) !important;
+  overflow:hidden;
+}}
+[data-testid="stDialog"] [role="dialog"]::before, div[role="dialog"][aria-modal="true"]::before {{
+  content:""; display:block; height:5px; margin:-1px -1px 0;
+  background:linear-gradient(90deg, var(--tk-accent), var(--tk-accent2));
+}}
+[data-testid="stDialog"] [role="dialog"] *, div[role="dialog"][aria-modal="true"] * {{ color:var(--tk-text); }}
+[data-testid="stDialog"] h1, [data-testid="stDialog"] h2, [data-testid="stDialog"] h3, [data-testid="stDialog"] h4,
+div[role="dialog"][aria-modal="true"] h1, div[role="dialog"][aria-modal="true"] h2,
+div[role="dialog"][aria-modal="true"] h3, div[role="dialog"][aria-modal="true"] h4 {{
+  font-family:var(--tk-head) !important; color:var(--tk-text) !important;
+}}
+[data-testid="stDialog"] strong, div[role="dialog"][aria-modal="true"] strong {{ color:var(--tk-accent) !important; }}
+[data-testid="stDialog"] [data-testid="stCaptionContainer"] *, div[role="dialog"][aria-modal="true"] small {{ color:var(--tk-muted) !important; }}
+[data-testid="stDialog"] button[aria-label="Close"], div[role="dialog"][aria-modal="true"] button[aria-label="Close"] {{
+  background:transparent !important; border:none !important;
+}}
+[data-testid="stDialog"] button[aria-label="Close"] svg, div[role="dialog"][aria-modal="true"] button[aria-label="Close"] svg {{
+  color:var(--tk-muted) !important; fill:var(--tk-muted) !important;
+}}
+[data-testid="stDialog"] button[data-testid^="stBaseButton"], div[role="dialog"][aria-modal="true"] button[data-testid^="stBaseButton"] {{
+  background:var(--tk-surface2) !important; color:var(--tk-text) !important;
+  border:1px solid var(--tk-border) !important; border-radius:12px !important; min-height:42px;
+}}
+[data-testid="stDialog"] button[data-testid^="stBaseButton"] *, div[role="dialog"][aria-modal="true"] button[data-testid^="stBaseButton"] * {{
+  color:var(--tk-text) !important;
+}}
+[data-testid="stDialog"] button[data-testid^="stBaseButton"]:hover, div[role="dialog"][aria-modal="true"] button[data-testid^="stBaseButton"]:hover {{
+  border-color:var(--tk-accent) !important;
+}}
+[data-testid="stDialog"] button[data-testid="stBaseButton-primary"], div[role="dialog"][aria-modal="true"] button[data-testid="stBaseButton-primary"] {{
+  background:linear-gradient(100deg, var(--tk-accent), color-mix(in srgb, var(--tk-accent) 68%, var(--tk-accent2)), var(--tk-accent)) !important;
+  background-size:220% 100% !important; animation:tk-shine 6s ease-in-out infinite; border-color:transparent !important;
+}}
+[data-testid="stDialog"] button[data-testid="stBaseButton-primary"] *, div[role="dialog"][aria-modal="true"] button[data-testid="stBaseButton-primary"] * {{
+  color:var(--tk-on) !important;
 }}
 [data-testid="stPopoverBody"] * {{ color:var(--tk-text); }}
 /* Popover: düymə və daxiletmələr .stApp-dan kənarda çəkilir, ona görə ayrıca tema verilir */
