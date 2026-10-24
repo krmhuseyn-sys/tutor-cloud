@@ -17,7 +17,7 @@ concurrency:
 
 jobs:
   wake:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04   # ubuntu-latest artıq 26.04-dür, Playwright onu hələ dəstəkləmir
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
