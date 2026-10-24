@@ -2168,6 +2168,26 @@ def mfa_screen(sb):
     st.button(t("logout"), key="mfa_out", on_click=do_logout)
 
 
+def _qr_svg(qr):
+    """Supabase-in verdiyi data:image/svg+xml linkindən təmiz SVG mətni çıxarır (yalnız <svg> hissəsi)."""
+    import urllib.parse
+    qr = str(qr or "")
+    if not qr.startswith("data:image/svg+xml"):
+        return None
+    head, _, body = qr.partition(",")
+    try:
+        body = base64.b64decode(body).decode("utf-8", "replace") if ";base64" in head else urllib.parse.unquote(body)
+    except Exception:
+        return None
+    i, j = body.find("<svg"), body.rfind("</svg>")
+    if i < 0 or j < 0:
+        return None
+    svg = body[i:j + 6]
+    if re.search(r"<script|on\w+\s*=|javascript:", svg, re.I):  # təhlükəli məzmun olsa göstərmə
+        return None
+    return svg
+
+
 def mfa_ui():
     """Ayarlar: Authenticator qoş / söndür."""
     ss = st.session_state
@@ -2210,10 +2230,13 @@ def mfa_ui():
                 st.error(ct("mfa_fail"))
         return
     st.markdown(ct("mfa_scan"))
-    qr = en.get("qr", "")
-    if qr.startswith("data:image/svg+xml"):
-        st.markdown(f'<img alt="QR" src="{_e(qr)}" style="width:200px;height:200px;background:#fff;padding:8px;border-radius:12px">',
-                    unsafe_allow_html=True)
+    svg = _qr_svg(en.get("qr", ""))
+    if svg:
+        try:
+            st.image(svg, width=220)  # Streamlit data: linkli <img>-i göstərmir, ona görə SVG birbaşa verilir
+        except Exception:
+            st.markdown(f'<div style="width:220px;background:#fff;padding:8px;border-radius:12px">{svg}</div>',
+                        unsafe_allow_html=True)
     st.caption(ct("mfa_manual"))
     st.code(en.get("secret", ""))
     with st.form("mfa_enroll_form", clear_on_submit=True):
