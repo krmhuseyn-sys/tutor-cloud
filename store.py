@@ -17,6 +17,68 @@ CHAT_ID_RE = re.compile(r"^[A-Za-z0-9_\-]+$")
 RESERVED = {"admin", "administrator", "root", "support", "system", "moderator", "owner", "tutor", "null", "none"}
 
 
+# ---------------------------- mesaj şifrələməsi ----------------------------
+# Mesajlar bazaya AES-256-GCM ilə şifrələnmiş yazılır. Açar yalnız Streamlit Secrets / .env-dəki MSG_KEY-dir
+# (Supabase-də yoxdur). Hər mesajın öz təsadüfi nonce-u var; açar hər söhbət üçün ayrıca törədilir və söhbət
+# nömrəsi də doğrulanır (şifrəli mətni başqa söhbətə köçürmək olmur). MSG_KEY_PREV açarı dəyişəndə köhnə mesajları oxumaq üçündür.
+try:
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+    from cryptography.hazmat.primitives.kdf.hkdf import HKDF
+    from cryptography.hazmat.primitives import hashes as _hashes
+except Exception:  # noqa
+    AESGCM = None
+
+import base64 as _b64
+
+
+class MsgKeyMissing(Exception):
+    pass
+
+
+def _msg_master(name):
+    raw = (os.getenv(name, "") or "").strip()
+    return raw.encode("utf-8") if len(raw) >= 24 else None
+
+
+def _msg_conv_key(master, conv):
+    return HKDF(algorithm=_hashes.SHA256(), length=32, salt=b"tutor-msg-v1", info=str(conv).encode("utf-8")).derive(master)
+
+
+def msg_key_ok():
+    return AESGCM is not None and _msg_master("MSG_KEY") is not None
+
+
+def msg_encrypt(conv, text):
+    master = _msg_master("MSG_KEY")
+    if AESGCM is None or master is None:
+        raise MsgKeyMissing("MSG_KEY")
+    nonce = os.urandom(12)
+    ct = AESGCM(_msg_conv_key(master, conv)).encrypt(nonce, str(text).encode("utf-8"), str(conv).encode("utf-8"))
+    return "v1:" + _b64.urlsafe_b64encode(nonce + ct).decode("ascii")
+
+
+def msg_decrypt(conv, blob):
+    """Şifrəli mətni açır. 'v1:' ilə başlamayan mətn (kimsə API-ni birbaşa çağırıbsa) olduğu kimi, amma təmiz mətn kimi qaytarılır."""
+    blob = str(blob or "")
+    if not blob.startswith("v1:"):
+        return blob
+    if AESGCM is None:
+        return "[?]"
+    try:
+        raw = _b64.urlsafe_b64decode(blob[3:].encode("ascii"))
+    except Exception:
+        return "[?]"
+    for name in ("MSG_KEY", "MSG_KEY_PREV"):
+        master = _msg_master(name)
+        if master is None:
+            continue
+        try:
+            return AESGCM(_msg_conv_key(master, conv)).decrypt(raw[:12], raw[12:], str(conv).encode("utf-8")).decode("utf-8")
+        except Exception:
+            continue
+    return "[?]"
+
+
 class SessionExpired(Exception):
     """Giriş sessiyası bitib, yenidən daxil olmaq lazımdır."""
 
@@ -656,11 +718,21 @@ class SupabaseStore:
     def msg_conversations(self):
         return self._msg("msg_conversations_list") or []
 
+    def msg_key_ok(self):
+        return msg_key_ok()
+
     def msg_fetch(self, conv, after=0):
-        return self._msg("msg_fetch", {"p_conv": conv, "p_after": int(after or 0)}) or []
+        rows = self._msg("msg_fetch", {"p_conv": conv, "p_after": int(after or 0)}) or []
+        for m in rows:
+            m["body"] = msg_decrypt(conv, m.get("body"))
+        return rows
 
     def msg_send(self, conv, body):
-        r = self._msg("msg_send", {"p_conv": conv, "p_body": (body or "")[:1000]})
+        try:
+            blob = msg_encrypt(conv, (body or "")[:1000])
+        except MsgKeyMissing:
+            return {"ok": False, "error": "no_key"}
+        r = self._msg("msg_send", {"p_conv": conv, "p_body": blob})
         return r if isinstance(r, dict) else {"ok": False, "error": "unknown"}
 
     def msg_delete(self, mid):
@@ -710,7 +782,14 @@ class SupabaseStore:
         return r if isinstance(r, dict) else {"ok": False, "error": "unknown"}
 
     def owner_msg_reports(self):
-        return self._msg("owner_msg_reports") or []
+        reps = self._msg("owner_msg_reports") or []
+        for r in reps:
+            for x in r.get("snapshot") or []:
+                x["body"] = msg_decrypt(r.get("conversation_id"), x.get("body"))
+        return reps
+
+    def owner_security_log(self, limit=40):
+        return self._msg("owner_security_log", {"p_limit": int(limit)}) or []
 
     def owner_msg_resolve(self, rid, action):
         r = self._msg("owner_msg_resolve", {"p_id": int(rid), "p_action": "block" if action == "block" else "dismiss"})

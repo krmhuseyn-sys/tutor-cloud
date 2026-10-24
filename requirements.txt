@@ -6,3 +6,4 @@ openai==3.24.0
 edge-tts==7.3.1
 supabase>=2.0
 reportlab>=4.0
+cryptography>=42.0
