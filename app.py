@@ -399,11 +399,20 @@ client = get_client()
 db = get_db()
 USAGE = "usage.json"
 
-st.set_page_config(page_title="Tutor Komandam", layout="wide")
 try:
     _ql = st.query_params.get("lang")
 except Exception:
     _ql = None
+# tətbiqin adı interfeys dilinə görə (dil seçimi aşağıda təyin olunur; burada eyni qayda ilə əvvəlcədən hesablanır)
+BRAND = {"az": "Tutor Komandam", "en": "My Tutor", "ru": "Мой тьютор"}
+
+
+def brand():
+    return BRAND.get(st.session_state.get("ui", "az"), BRAND["az"])
+
+
+_ui0 = st.session_state.get("ui") or st.session_state.get("ui_keep") or (_ql if _ql in BRAND else "az")
+st.set_page_config(page_title=BRAND.get(_ui0, BRAND["az"]), layout="wide")
 st.session_state.setdefault("ui", st.session_state.get("ui_keep") or (_ql if _ql in ("az", "en", "ru") else "az"))
 if st.session_state["ui"] not in TXT:
     st.session_state["ui"] = "az"
@@ -461,7 +470,7 @@ _CK_W = st.empty()
 # ---- PIN qoruması (APP_PIN təyin olunubsa; təyin olunmayıbsa yerli işləmədə heç nə soruşmur) ----
 _PIN = os.getenv("APP_PIN", "")
 if _PIN and not AUTH_ON and not st.session_state.get("authed"):
-    st.title("Tutor Komandam")
+    st.title(brand())
     _tries = st.session_state.get("pin_tries", 0)
     if _tries >= 5:
         st.error("Çox səhv cəhd. Səhifəni bağlayıb sonra yenidən cəhd et.")
@@ -1654,7 +1663,7 @@ def try_restore():
         ss["restore_dbg"] = f"komponent xətası: {type(e).__name__}"
         return False
     if val is None:  # komponent hələ cavab verməyib
-        st.markdown(themes.hero("Tutor Komandam", ""), unsafe_allow_html=True)
+        st.markdown(themes.hero(brand(), ""), unsafe_allow_html=True)
         st.stop()
     ss["restore_tried"] = True
     rt = (val or {}).get("rt") if isinstance(val, dict) else None
@@ -2100,7 +2109,7 @@ def reset_panel():
 
 def login_screen():
     lang_picker()
-    st.markdown(themes.hero("Tutor Komandam", t("welcome_sub")), unsafe_allow_html=True)
+    st.markdown(themes.hero(brand(), t("welcome_sub")), unsafe_allow_html=True)
     with st.container(key="login_card"):
         ss = st.session_state
         # st.tabs əvəzinə öz düymələrimiz: səhifə yenilənəndə (kod göndəriləndə) seçilmiş tab itmir
@@ -2313,7 +2322,7 @@ def mfa_ui():
                             sb.auth.mfa.unenroll({"factor_id": f_.id})
                 except Exception:
                     pass
-                r = sb.auth.mfa.enroll({"factor_type": "totp", "friendly_name": "Tutor Komandam"})
+                r = sb.auth.mfa.enroll({"factor_type": "totp", "friendly_name": brand()})
                 ss["mfa_enroll"] = {"id": r.id, "qr": getattr(r.totp, "qr_code", "") or "",
                                     "secret": getattr(r.totp, "secret", "") or ""}
                 st.rerun()
@@ -6588,10 +6597,10 @@ def _tour_content():
             st.rerun()
 
 
-if hasattr(st, "dialog"):
-    _tour_dialog = st.dialog("Tutor Komandam", width="large")(_tour_content)
-else:  # köhnə Streamlit: pəncərə yoxdur, səhifənin yuxarısında göstərilir
-    def _tour_dialog():
+def _tour_dialog():
+    if hasattr(st, "dialog"):  # başlıq interfeys dilindədir, ona görə pəncərə hər dəfə yaradılır
+        st.dialog(brand(), width="large")(_tour_content)()
+    else:  # köhnə Streamlit: pəncərə yoxdur, səhifənin yuxarısında göstərilir
         with st.container(border=True):
             _tour_content()
 
@@ -6630,7 +6639,7 @@ def cb_setcat(c):
 
 # ======================= YAN PANEL =======================
 st.sidebar.markdown(
-    DASH_CSS + SB_CSS + '<div class="sb-brand"><div class="sb-logo">T</div><div class="sb-name">Tutor Komandam</div></div>',
+    DASH_CSS + SB_CSS + '<div class="sb-brand"><div class="sb-logo">T</div><div class="sb-name">' + _e(brand()) + '</div></div>',
     unsafe_allow_html=True)
 if AUTH_ON:
     _lim = max(DAILY_QUESTIONS, 1)
