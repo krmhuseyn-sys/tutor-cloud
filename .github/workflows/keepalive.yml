@@ -20,11 +20,11 @@ jobs:
     runs-on: ubuntu-24.04   # ubuntu-latest artıq 26.04-dür, Playwright onu hələ dəstəkləmir
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           sparse-checkout: .github
           persist-credentials: false
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - name: Brauzeri qur
@@ -48,10 +48,12 @@ jobs:
             echo "::warning::SUPABASE_URL və ya SUPABASE_KEY secret-i yoxdur, baza oyadılmadı."
             exit 0
           fi
-          code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 \
-            -H "apikey: $SB_KEY" -H "Authorization: Bearer $SB_KEY" \
-            "${SB_URL%/}/rest/v1/profiles?select=id&limit=1")
+          base="${SB_URL%/}"; base="${base%/rest/v1}"; base="${base%/}"   # sonda /rest/v1 və ya / qalıbsa təmizlə
+          code=$(curl -s -o /tmp/sb.txt -w "%{http_code}" --max-time 30 \
+            -H "apikey: $SB_KEY" \
+            "$base/rest/v1/profiles?select=id&limit=1")
           echo "Supabase cavabı: $code"
+          if [ "$code" != "200" ]; then echo "Mesaj: $(head -c 300 /tmp/sb.txt)"; fi
           if [ "$code" -ge 500 ] || [ "$code" = "000" ]; then
             echo "::error::Baza cavab vermədi (kod $code). Supabase panelində layihə dayandırılıbsa, Restore bas."
             exit 1
