@@ -661,3 +661,58 @@ def add(d):
 def get(lang):
     i = {"az": 0, "en": 1, "ru": 2}.get(lang, 0)
     return {k: v[i] for k, v in _T.items()}
+
+
+# --- tam məxfilik qaydası (qeydiyyatdakı razılıq xanası buna istinad edir)
+add({
+    "pp_title": ("📄 Məxfilik qaydası (tam mətn)", "📄 Privacy policy (full text)", "📄 Политика конфиденциальности (полный текст)"),
+    "pp_body": (
+        "**Nə saxlanılır:** e-poçt, istifadəçi adı, profil şəkli, söhbətlər, tutor yaddaşı, kartlar, planlar, "
+        "imtahan nəticələri, istifadəçilər arası mesajlar və rəy verdikdə sualın və cavabın qısa hissəsi. "
+        "Parolu biz görmürük: Supabase onu şifrələnmiş (hash) halda saxlayır.\n\n"
+        "**Niyə:** yalnız tutorun işləməsi üçün (cavab vermək, irəliləyişi və kartları saxlamaq). Reklam yoxdur, data satılmır.\n\n"
+        "**Kimə göndərilir:** Supabase (verilənlər bazası və giriş), Streamlit Community Cloud (hostinq), "
+        "Google Gemini və Groq (sualların, faylların və səsin cavablandırılması), Microsoft Edge səsi (səsli cavab üçün mətn). "
+        "Bu xidmətlər Azərbaycandan kənarda yerləşir. Pulsuz səviyyədə provayderlər məlumatı öz məhsulunu yaxşılaşdırmaq üçün istifadə edə bilər, "
+        "ona görə həssas şəxsi məlumat yazma.\n\n"
+        "**Kim görür:** digər istifadəçilər sənin söhbətlərini görmür. Layihə sahibi texniki olaraq verilənlər bazasına çıxışa malikdir "
+        "və yalnız texniki problem və ya sui-istifadə halında baxa bilər.\n\n"
+        "**Kuki:** yalnız \"Məni xatırla\" seçəndə giriş tokeni saxlanılır. Analitika və reklam kukisi yoxdur.\n\n"
+        "**Nə qədər saxlanılır:** hesabı silənə qədər. Hesabı sildikdə bütün data həmişəlik silinir.\n\n"
+        "**Hüquqların:** Parametrlərdə datanı JSON faylı kimi yükləyə, bütün cihazlardan çıxa və hesabını silə bilərsən. "
+        "Sual və ya düzəliş üçün: {contact}.\n\n"
+        "**Yaş:** 16 yaşdan kiçiklər valideynin xəbəri ilə istifadə etməlidir.",
+        "**What we store:** email, username, profile picture, chats, tutor memory, flashcards, plans, exam results, "
+        "messages between users, and a short part of the question and answer when you leave feedback. "
+        "We never see your password: Supabase stores it as a hash.\n\n"
+        "**Why:** only to run the tutor (answer questions, keep your progress and cards). No ads, and data is never sold.\n\n"
+        "**Who receives it:** Supabase (database and login), Streamlit Community Cloud (hosting), "
+        "Google Gemini and Groq (answering questions, files and voice), Microsoft Edge voices (text for spoken replies). "
+        "These services are located outside Azerbaijan. On free tiers, providers may use data to improve their products, "
+        "so do not write sensitive personal information.\n\n"
+        "**Who can see it:** other users cannot see your chats. The project owner technically has access to the database "
+        "and looks only to fix technical problems or stop abuse.\n\n"
+        "**Cookies:** a login token is stored only when you choose \"Remember me\". There are no analytics or advertising cookies.\n\n"
+        "**How long:** until you delete your account. Deleting it removes all your data permanently.\n\n"
+        "**Your rights:** in Settings you can download your data as a JSON file, sign out of all devices and delete your account. "
+        "Questions or corrections: {contact}.\n\n"
+        "**Age:** users under 16 should use the app with a parent's knowledge.",
+        "**Что хранится:** e-mail, имя пользователя, фото профиля, чаты, память тьютора, карточки, планы, результаты экзаменов, "
+        "сообщения между пользователями и короткая часть вопроса и ответа, если ты оставляешь отзыв. "
+        "Пароль мы не видим: Supabase хранит его в виде хеша.\n\n"
+        "**Зачем:** только для работы тьютора (ответы, прогресс и карточки). Рекламы нет, данные не продаются.\n\n"
+        "**Кому передаётся:** Supabase (база данных и вход), Streamlit Community Cloud (хостинг), "
+        "Google Gemini и Groq (ответы на вопросы, файлы и голос), голоса Microsoft Edge (текст для озвучки). "
+        "Эти сервисы находятся за пределами Азербайджана. На бесплатных тарифах провайдеры могут использовать данные для улучшения своих продуктов, "
+        "поэтому не пиши чувствительные личные данные.\n\n"
+        "**Кто видит:** другие пользователи твои чаты не видят. У владельца проекта есть технический доступ к базе данных, "
+        "и он смотрит её только для исправления технических проблем или пресечения злоупотреблений.\n\n"
+        "**Cookie:** токен входа сохраняется, только если выбрать «Запомнить меня». Аналитических и рекламных cookie нет.\n\n"
+        "**Как долго:** пока ты не удалишь аккаунт. При удалении все данные стираются навсегда.\n\n"
+        "**Твои права:** в настройках можно скачать свои данные в JSON, выйти на всех устройствах и удалить аккаунт. "
+        "Вопросы и исправления: {contact}.\n\n"
+        "**Возраст:** пользователям младше 16 лет — с ведома родителей."),
+    "pp_contact_dm": ("tətbiqdəki Mesajlar bölməsindən layihə sahibinə yaz",
+                      "write to the project owner in the app's Messages section",
+                      "напиши владельцу проекта в разделе «Сообщения»"),
+})

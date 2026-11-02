@@ -2164,6 +2164,7 @@ def login_screen():
                 if go2:
                     do_signup(email2, pw_a, pw_b, code, agree)
         st.caption(t("privacy"))
+        privacy_full()
         if st.query_params.get("debug") == "1":  # diaqnostika: token dəyəri göstərilmir
             st.caption(f"debug: bərpa={st.session_state.get('restore_dbg')}")
 
@@ -2847,6 +2848,17 @@ def ct(k, **kw):
     d = CT.get(st.session_state.get("ui", "az"), CT["az"])
     txt = d.get(k, CT["az"].get(k, k))
     return txt.format(**kw) if kw else txt
+
+
+def privacy_full():
+    """Tam məxfilik qaydası: qeydiyyatdakı razılıq xanası bu mətnə istinad edir."""
+    contact = ""
+    try:
+        contact = str(st.secrets.get("PRIVACY_CONTACT", "") or "").strip()
+    except Exception:
+        contact = ""
+    with st.expander(ct("pp_title")):
+        st.markdown(ct("pp_body").replace("{contact}", contact or ct("pp_contact_dm")))
 
 
 CARD_SYS = (
@@ -5115,6 +5127,7 @@ def account_ui():
         st.download_button(t("export_dl"), st.session_state["export_blob"], file_name="tutor_data.json",
                            mime="application/json", key="exp_dl")
     st.caption(t("privacy"))
+    privacy_full()
     st.divider()
     st.markdown("**" + ct("x_all_title") + "**")
     st.caption(ct("x_all_hint"))
