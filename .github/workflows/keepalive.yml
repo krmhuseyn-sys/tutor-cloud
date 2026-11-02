@@ -35,3 +35,24 @@ jobs:
         env:
           APP_URL: https://mytutor1.streamlit.app
         run: python .github/keepalive.py
+      # Supabase pulsuz layihəni 7 gün sorğu olmayanda dayandırır. Bu addım bazaya kiçik bir oxuma sorğusu göndərir.
+      # Yalnız publishable (anon) açar istifadə olunur; RLS səbəbindən heç bir data qaytarılmır, sadəcə baza "aktiv" sayılır.
+      # Lazım olan GitHub Secrets: SUPABASE_URL və SUPABASE_KEY (publishable). service_role QOYMA.
+      - name: Bazanı oyat
+        if: always()
+        env:
+          SB_URL: ${{ https://rhwuylmdyaigjqvajlax.supabase.co/rest/v1/ }}
+          SB_KEY: ${{ sb_publishable_M7LK2Z7znOdph1agQ7MzZA_rh8CEjlE }}
+        run: |
+          if [ -z "$SB_URL" ] || [ -z "$SB_KEY" ]; then
+            echo "::warning::SUPABASE_URL və ya SUPABASE_KEY secret-i yoxdur, baza oyadılmadı."
+            exit 0
+          fi
+          code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 \
+            -H "apikey: $SB_KEY" -H "Authorization: Bearer $SB_KEY" \
+            "${SB_URL%/}/rest/v1/profiles?select=id&limit=1")
+          echo "Supabase cavabı: $code"
+          if [ "$code" -ge 500 ] || [ "$code" = "000" ]; then
+            echo "::error::Baza cavab vermədi (kod $code). Supabase panelində layihə dayandırılıbsa, Restore bas."
+            exit 1
+          fi
