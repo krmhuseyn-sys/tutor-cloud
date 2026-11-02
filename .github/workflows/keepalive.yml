@@ -41,8 +41,8 @@ jobs:
       - name: Bazanı oyat
         if: always()
         env:
-          SB_URL: ${{ https://rhwuylmdyaigjqvajlax.supabase.co/rest/v1/ }}
-          SB_KEY: ${{ sb_publishable_M7LK2Z7znOdph1agQ7MzZA_rh8CEjlE }}
+          SB_URL: ${{ secrets.SUPABASE_URL }}
+          SB_KEY: ${{ secrets.SUPABASE_KEY }}
         run: |
           if [ -z "$SB_URL" ] || [ -z "$SB_KEY" ]; then
             echo "::warning::SUPABASE_URL və ya SUPABASE_KEY secret-i yoxdur, baza oyadılmadı."
