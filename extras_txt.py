@@ -716,3 +716,12 @@ add({
                       "write to the project owner in the app's Messages section",
                       "напиши владельцу проекта в разделе «Сообщения»"),
 })
+
+
+# --- söhbətin adını dəyişmək
+add({
+    "rn_title": ("✏️ Adı dəyiş", "✏️ Rename", "✏️ Переименовать"),
+    "rn_label": ("Söhbətin adı", "Chat name", "Название чата"),
+    "rn_save": ("Saxla", "Save", "Сохранить"),
+    "rn_ok": ("Ad dəyişdi.", "Renamed.", "Название изменено."),
+})

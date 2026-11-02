@@ -1487,6 +1487,65 @@ def cb_sugg(text):
     st.session_state["pending_q"] = text
 
 
+# ---- söhbət adları: Claude kimi qısa ad (2-3 mesajdan sonra), əl ilə dəyişmək olar
+TITLE_AT = 4  # 2-ci sual-cavabdan sonra (4 mesaj) ad verilir
+
+
+def _first_q_title(chat):
+    """Köhnə qayda ilə verilən ad: ilk sualın ilk 40 simvolu (fayl qeydi çıxılır)."""
+    if not chat.get("messages"):
+        return ""
+    q0 = str(chat["messages"][0].get("content") or "")
+    for fn in {TXT[l_]["file_note"] for l_ in TXT}:
+        q0 = q0.split("\n\n" + fn)[0]
+    return re.sub(r"\s+", " ", q0).strip()[:40]
+
+
+def clean_title(x):
+    x = str(x or "").strip().splitlines()[0] if str(x or "").strip() else ""
+    x = re.sub(r"^(title|başlıq|ad|название)\s*:\s*", "", x, flags=re.I)
+    x = re.sub(r"[\x00-\x1f<>`*#_\"\'«»“”]", "", x).strip(" .:;-–—")
+    return re.sub(r"\s+", " ", x)[:60]
+
+
+def auto_title(chat):
+    """Söhbətin dilində 2-5 sözlük ad. Alınmasa boş qaytarır (köhnə ad qalır)."""
+    parts = []
+    for m_ in chat["messages"][:TITLE_AT]:
+        who = "User" if m_.get("role") == "user" else "Tutor"
+        parts.append(f"{who}: {str(m_.get('content') or '')[:600]}")
+    system = ("You name chats. Reply with ONLY a short title of 2 to 5 words that describes the topic of the "
+              "conversation below. Write it in the same language the user writes in (Azerbaijani, English, "
+              "Russian or other). No quotes, no emoji, no final punctuation.")
+    try:
+        out = ask_msgs(system, [{"role": "user", "content": "\n\n".join(parts)}], free_plan(), 0.2)
+    except Exception:
+        return ""
+    t_ = clean_title(out)
+    return t_ if 2 <= len(t_) <= 60 else ""
+
+
+def cb_rename(key_, cid, wkey):
+    name = clean_title(st.session_state.get(wkey))
+    if not name:
+        return
+    try:
+        ch = S.load_chat(key_, cid)
+        if not ch:
+            return
+        ch["title"] = name
+        S.save_chat(key_, ch)
+        drop_chat_cache()
+        c_ = st.session_state.get("_chat")
+        if c_ and c_[1] == cid:
+            c_[3]["title"] = name
+        st.session_state["rn_ok"] = True
+    except store.SessionExpired:
+        drop_login()
+    except Exception:
+        st.session_state["rn_err"] = True
+
+
 # ======================= SÖHBƏT DÜYMƏLƏRİ =======================
 def cb_open(cid):
     st.session_state.cid = cid
@@ -7013,6 +7072,11 @@ if q and answer:
     chat["messages"].append({"role": "user", "content": saved_q})
     chat["messages"].append({"role": "assistant", "content": answer, "sources": srcs,
                              "web": web_urls, "by": f"{t('answered')}: {by}"})
+    # 2-ci sual-cavabdan sonra qısa ad (əl ilə dəyişilibsə toxunmur)
+    if len(chat["messages"]) == TITLE_AT and chat["title"] == _first_q_title(chat):
+        _nt = auto_title(chat)
+        if _nt:
+            chat["title"] = _nt
     try:
         S.save_chat(key, chat)
         drop_chat_cache()
@@ -7094,6 +7158,15 @@ with list_box:
         with c3:
             st.button("×", key=f"del_{c['id']}", help=t("delete"), on_click=cb_delete, args=(key, c["id"]))
 
+    if chat["messages"] and st.session_state.cid == chat["id"]:
+        with st.popover(ct("rn_title"), use_container_width=True):
+            _rk = "rn_" + chat["id"] + "_" + hashlib.md5((chat.get("title") or "").encode()).hexdigest()[:8]  # ad dəyişəndə sahə yenilənir
+            st.text_input(ct("rn_label"), value=chat.get("title") or "", key=_rk, max_chars=60)
+            st.button(ct("rn_save"), key=f"rn_btn_{chat['id']}", on_click=cb_rename, args=(key, chat["id"], _rk))
+            if st.session_state.pop("rn_ok", None):
+                st.caption(ct("rn_ok"))
+            if st.session_state.pop("rn_err", None):
+                st.caption(t("save_err"))
     if chat["messages"]:
         with st.popover(ct("exp_title"), use_container_width=True):
             wide(st.download_button, ct("dl_chat"), data=chat_md(chat, key), file_name="tutor_soxbet.md",
